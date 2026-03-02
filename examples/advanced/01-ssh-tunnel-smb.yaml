@@ -1,0 +1,16 @@
+# SSH 隧道 + SMB 配置
+mounts:
+  - name: home-nas-via-ssh
+    type: tunnel-smb
+    ssh:
+      host: your-home-router.com
+      port: 22
+      user: admin
+      key_file: ~/.ssh/home_router
+    smb:
+      addr: 192.168.1.100
+      port: 445
+      share_name: shared
+      username: nasuser
+      password: naspass
+    mount_dir_path: /mnt/home-nas

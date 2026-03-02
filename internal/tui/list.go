@@ -182,8 +182,8 @@ func (m ListModel) renderRow(index int, entry config.MountEntry) string {
 
 	// Truncate values if too long
 	name := truncate(entry.Name, nameWidth)
-	addr := truncate(fmt.Sprintf("%s:%d", entry.SMBAddr, entry.GetSMBPort()), addrWidth)
-	path := truncate(entry.ActualMountPath, pathWidth)
+	addr := truncate(fmt.Sprintf("%s:%d", entry.GetEffectiveSMBAddr(), entry.GetEffectiveSMBPort()), addrWidth)
+	path := truncate(entry.MountDirPath, pathWidth)
 
 	// Build row
 	row := fmt.Sprintf("%-*s  %-*s  %-*s  %s",

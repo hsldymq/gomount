@@ -1,0 +1,36 @@
+# WebDAV 完整配置
+mounts:
+  - name: nextcloud
+    type: webdav
+    webdav:
+      url: https://cloud.example.com/remote.php/dav/files/user/
+      username: user
+      password: app-specific-password
+    mount_dir_path: /mnt/nextcloud
+    options:
+      file_mode: "0644"
+      dir_mode: "0755"
+
+  - name: jianguoyun
+    type: webdav
+    webdav:
+      url: https://dav.jianguoyun.com/dav/
+      username: your@email.com
+      password: your-password
+    mount_dir_path: /mnt/jianguoyun
+
+  - name: seafile
+    type: webdav
+    webdav:
+      url: https://seafile.example.com/seafdav/
+      username: user
+      password: pass
+    mount_dir_path: /mnt/seafile
+
+workspaces:
+  - name: all-cloud
+    description: "所有云存储服务"
+    mounts:
+      - nextcloud
+      - jianguoyun
+      - seafile

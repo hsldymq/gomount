@@ -1,0 +1,103 @@
+# gomount 配置文件示例
+# 复制到 ~/.config/gomount_config.yaml 并根据需要修改
+
+# ===============================
+# SMB 挂载示例
+# ===============================
+mounts:
+  - name: nas
+    type: smb
+    smb_addr: 192.168.1.100
+    smb_port: 445                    # 可选，默认445
+    share_name: shared_folder
+    username: user
+    password: pass                   # 可选，会交互式提示
+    mount_dir_path: /mnt/nas         # 必须：完整的挂载路径
+
+  # -------------------------------
+  # SSHFS 挂载示例
+  # -------------------------------
+  - name: dev-server
+    type: sshfs
+    ssh:
+      host: dev.example.com
+      port: 22                       # 可选，默认22
+      user: developer
+      key_file: ~/.ssh/id_rsa        # SSH密钥认证（推荐）
+      # password: pass               # 或密码（不推荐）
+      keepalive_interval: 30         # SSH保活间隔（秒）
+      keepalive_count_max: 3         # 最大失败次数
+    remote_path: /home/developer/projects
+    mount_dir_path: /mnt/dev-projects  # 必须：完整的挂载路径
+
+  # -------------------------------
+  # SSH隧道 + SMB 示例
+  # -------------------------------
+  - name: home-nas-via-ssh
+    type: tunnel-smb
+    ssh:
+      host: home-gateway.com         # SSH跳板机（公网IP）
+      port: 22
+      user: admin
+      key_file: ~/.ssh/home
+    smb:
+      addr: 192.168.1.100           # 内网SMB服务器IP
+      port: 445
+      share_name: shared
+      username: smbuser
+      password: smbpass
+    mount_dir_path: /mnt/home-nas    # 必须：完整的挂载路径
+
+  # -------------------------------
+  # WebDAV 示例
+  # -------------------------------
+  - name: nextcloud
+    type: webdav
+    webdav:
+      url: https://cloud.example.com/remote.php/dav/files/user/
+      username: user
+      password: pass
+    mount_dir_path: /mnt/cloud       # 必须：完整的挂载路径
+    options:
+      file_mode: "0644"
+      dir_mode: "0755"
+
+# ===============================
+# 工作区（Workspace）示例
+# ===============================
+workspaces:
+  - name: company-dev
+    description: "公司开发环境"
+    mounts:
+      - nas
+      - dev-server
+
+  - name: home-all
+    description: "家里所有存储"
+    mounts:
+      - home-nas-via-ssh
+      - nextcloud
+
+# ===============================
+# 配置说明
+# ===============================
+#
+# 1. mount_dir_path 说明：
+#    - 每个 mount 必须指定完整的挂载路径
+#    - 支持 ~ 展开为用户主目录
+#    - 示例: /mnt/nas, ~/Mounts/dev, /media/backup
+#
+# 2. 密码安全：
+#    - 建议 omit password 字段，挂载时交互式输入
+#    - 设置文件权限: chmod 600 ~/.config/gomount_config.yaml
+#
+# 3. SSH密钥：
+#    - 使用 key_file 指定私钥路径
+#    - 确保私钥权限为 600
+#
+# 4. 驱动类型自动检测：
+#    - 如果 type 省略，会根据字段自动推断：
+#      * SSH + RemotePath → SSHFS
+#      * SSH + SMB → tunnel-smb
+#      * WebDAV.URL → webdav
+#      * SMBAddr → smb

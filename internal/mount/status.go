@@ -33,7 +33,7 @@ func CheckStatus(mountPath string) (bool, error) {
 
 // CheckEntryStatus 检查单个挂载条目的挂载状态
 func CheckEntryStatus(entry *config.MountEntry) (bool, error) {
-    return CheckStatus(entry.ActualMountPath)
+    return CheckStatus(entry.MountDirPath)
 }
 
 // RefreshAllStatus 更新配置中所有条目的挂载状态

@@ -49,7 +49,7 @@ func Load(path string) (*Config, error) {
 		return nil, &ConfigError{Path: path, Err: fmt.Errorf("config validation failed: %w", err)}
 	}
 
-	// Apply defaults and resolve paths
+	// Normalize mount paths
 	if err := cfg.Normalize(); err != nil {
 		return nil, &ConfigError{Path: path, Err: fmt.Errorf("failed to normalize config: %w", err)}
 	}
@@ -59,26 +59,9 @@ func Load(path string) (*Config, error) {
 
 // Normalize 应用默认值并解析路径
 func (c *Config) Normalize() error {
-	// Expand ~ in base_dir
-	baseDir := c.BaseDir
-	if len(baseDir) > 0 && baseDir[0] == '~' {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return fmt.Errorf("failed to expand ~ in base_dir: %w", err)
-		}
-		baseDir = home + baseDir[1:]
-	}
-
-	// Convert to absolute path
-	baseDir, err := filepath.Abs(baseDir)
-	if err != nil {
-		return fmt.Errorf("failed to resolve absolute path for base_dir: %w", err)
-	}
-	c.BaseDir = baseDir
-
 	// Normalize each mount entry
 	for i := range c.Mounts {
-		if err := c.Mounts[i].Normalize(baseDir); err != nil {
+		if err := c.Mounts[i].Normalize(); err != nil {
 			return err
 		}
 	}
@@ -87,62 +70,34 @@ func (c *Config) Normalize() error {
 }
 
 // Normalize 解析单个条目的挂载路径
-func (m *MountEntry) Normalize(baseDir string) error {
-	// Resolve mount path
+func (m *MountEntry) Normalize() error {
 	mountPath := m.MountDirPath
-	if mountPath == "" {
-		// Use mount_dir_name or name
-		dirName := m.MountDirName
-		if dirName == "" {
-			dirName = m.Name
-		}
-		mountPath = filepath.Join(baseDir, dirName)
-	} else {
-		// Expand ~ if present
-		if len(mountPath) > 0 && mountPath[0] == '~' {
-			home, err := os.UserHomeDir()
-			if err != nil {
-				return fmt.Errorf("failed to expand ~ in mount_dir_path: %w", err)
-			}
-			mountPath = home + mountPath[1:]
-		}
 
-		// Convert to absolute path
-		var err error
-		mountPath, err = filepath.Abs(mountPath)
+	// Expand ~ if present
+	if len(mountPath) > 0 && mountPath[0] == '~' {
+		home, err := os.UserHomeDir()
 		if err != nil {
-			return fmt.Errorf("failed to resolve absolute path for mount_dir_path: %w", err)
+			return fmt.Errorf("failed to expand ~ in mount_dir_path for %s: %w", m.Name, err)
 		}
+		mountPath = home + mountPath[1:]
 	}
 
-	m.ActualMountPath = mountPath
-	m.mountPathResolved = true
-	return nil
-}
-
-// ValidateBaseDir 检查 base_dir 是否存在或可以创建
-func (c *Config) ValidateBaseDir() error {
-	info, err := os.Stat(c.BaseDir)
-	if os.IsNotExist(err) {
-		// Base dir doesn't exist, that's OK - we'll create it when needed
-		return nil
-	}
+	// Convert to absolute path
+	var err error
+	mountPath, err = filepath.Abs(mountPath)
 	if err != nil {
-		return fmt.Errorf("failed to access base_dir: %w", err)
+		return fmt.Errorf("failed to resolve absolute path for mount_dir_path of %s: %w", m.Name, err)
 	}
 
-	// Check if it's actually a directory
-	if !info.IsDir() {
-		return fmt.Errorf("base_dir exists but is not a directory: %s", c.BaseDir)
-	}
-
+	m.MountDirPath = mountPath
 	return nil
 }
 
-// EnsureBaseDir 如果 base_dir 不存在则创建
-func (c *Config) EnsureBaseDir() error {
-	if err := os.MkdirAll(c.BaseDir, 0755); err != nil {
-		return fmt.Errorf("failed to create base_dir: %w", err)
+// EnsureMountDir 如果挂载目录的父目录不存在则创建
+func (m *MountEntry) EnsureMountDir() error {
+	parentDir := filepath.Dir(m.MountDirPath)
+	if err := os.MkdirAll(parentDir, 0755); err != nil {
+		return fmt.Errorf("failed to create parent directory for %s: %w", m.Name, err)
 	}
 	return nil
 }
@@ -208,7 +163,7 @@ func DefaultConfigPath() string {
 	if err != nil {
 		return ""
 	}
-	return filepath.Join(home, ".config", "smb_mount_config.yaml")
+	return filepath.Join(home, ".config", "gomount_config.yaml")
 }
 
 // ConfigError 配置加载或验证错误

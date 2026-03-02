@@ -1,0 +1,20 @@
+# SSHFS 基础配置
+mounts:
+  - name: dev-server
+    type: sshfs
+    ssh:
+      host: dev.example.com
+      user: developer
+      key_file: ~/.ssh/id_rsa
+    remote_path: /home/developer/projects
+    mount_dir_path: /mnt/dev-projects
+
+  - name: alt-port-server
+    type: sshfs
+    ssh:
+      host: secure.example.com
+      port: 2222
+      user: user
+      key_file: ~/.ssh/secure_key
+    remote_path: /data
+    mount_dir_path: /mnt/secure-data
