@@ -44,13 +44,13 @@ vim ~/.config/gomount_config.yaml
 
 ```bash
 # 列出所有挂载
-smb_mount list
+gomount list
 
 # 挂载指定条目
-smb_mount mount nas
+gomount mount nas
 
 # 卸载指定条目
-smb_mount umount nas
+gomount umount nas
 ```
 
 ---
@@ -154,10 +154,10 @@ workspaces:
 使用方法：
 ```bash
 # 一键挂载整个开发环境
-smb_mount workspace company-dev
+gomount workspace company-dev
 
 # 下班一键卸载
-smb_mount unworkspace company-dev
+gomount unworkspace company-dev
 ```
 
 ### 场景2：远程访问家里NAS

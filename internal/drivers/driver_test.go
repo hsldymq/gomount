@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/hsldymq/smb_mount/internal/config"
+	"github.com/hsldymq/gomount/internal/config"
 )
 
 // MockDriver 用于测试的模拟驱动
@@ -149,7 +149,6 @@ func TestDriverRegistry_Detect_AutoDetect_SSHFS(t *testing.T) {
 		t.Errorf("expected sshfs driver, got %s", driver.Type())
 	}
 }
-
 
 func TestDriverRegistry_Detect_AutoDetect_WebDAV(t *testing.T) {
 	registry := NewRegistry()
