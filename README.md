@@ -1,4 +1,4 @@
-# smb_mount
+# gomount
 
 A convenient CLI tool for managing SMB/CIFS mounts on Linux systems with an interactive TUI.
 
@@ -17,24 +17,24 @@ A convenient CLI tool for managing SMB/CIFS mounts on Linux systems with an inte
 ### From Source
 
 ```bash
-git clone https://github.com/hsldymq/smb_mount.git
-cd smb_mount
+git clone https://github.com/hsldymq/gomount.git
+cd gomount
 make install
 ```
 
 ### Using Go
 
 ```bash
-go install github.com/hsldymq/smb_mount@latest
+go install github.com/hsldymq/gomount@latest
 ```
 
 ### Manual Installation
 
 ```bash
-git clone https://github.com/hsldymq/smb_mount.git
-cd smb_mount
+git clone https://github.com/hsldymq/gomount.git
+cd gomount
 make build
-sudo cp bin/smb_mount /usr/local/bin/
+sudo cp bin/gomount /usr/local/bin/
 ```
 
 ## Requirements
@@ -63,7 +63,7 @@ sudo pacman -S cifs-utils
 
 ## Configuration
 
-Create a configuration file at `~/.config/smb_mount_config.yaml`:
+Create a configuration file at `~/.config/gomount_config.yaml`:
 
 ```yaml
 base_dir: /mnt/smb_share
@@ -98,7 +98,7 @@ mounts:
 | `mount_dir_name` | No | `<name>` | Directory name within base_dir |
 | `mount_dir_path` | No | - | Full custom mount path (overrides base_dir and mount_dir_name) |
 
-An example configuration file is available at `configs/smb_mount_config.yaml.example`.
+An example configuration file is available at `configs/gomount_config.yaml.example`.
 
 ## Usage
 
@@ -107,9 +107,9 @@ An example configuration file is available at `configs/smb_mount_config.yaml.exa
 Display all configured shares with their mount status:
 
 ```bash
-smb_mount list
+gomount list
 # or
-smb_mount -l
+gomount -l
 ```
 
 ### Mount Shares
@@ -117,9 +117,9 @@ smb_mount -l
 Mount a specific share by name:
 
 ```bash
-smb_mount mount nas1
+gomount mount nas1
 # or
-smb_mount -m nas1
+gomount -m nas1
 ```
 
 Interactive selection with multi-select support:
@@ -127,9 +127,9 @@ Interactive selection with multi-select support:
 - Press `enter` to confirm and mount all selected shares
 
 ```bash
-smb_mount mount
+gomount mount
 # or
-smb_mount -m
+gomount -m
 ```
 
 **Note**: When mounting multiple shares, if one fails the others will continue. A summary is shown at the end.
@@ -139,17 +139,17 @@ smb_mount -m
 Unmount a specific share by name:
 
 ```bash
-smb_mount umount nas1
+gomount umount nas1
 # or
-smb_mount -u nas1
+gomount -u nas1
 ```
 
 Interactive selection with multi-select support:
 
 ```bash
-smb_mount umount
+gomount umount
 # or
-smb_mount -u
+gomount -u
 ```
 
 **Note**: Batch operations continue even if individual operations fail. Success/failure count is displayed at the end.
@@ -159,28 +159,28 @@ smb_mount -u
 Use a configuration file from a custom location:
 
 ```bash
-smb_mount -c /path/to/config.yaml list
+gomount -c /path/to/config.yaml list
 ```
 
 ### Help
 
 ```bash
-smb_mount --help
-smb_mount list --help
-smb_mount mount --help
-smb_mount umount --help
+gomount --help
+gomount list --help
+gomount mount --help
+gomount umount --help
 ```
 
 ## CLI Reference
 
 ```
-smb_mount                  Show help (default)
-smb_mount list             List all configured mount points
-smb_mount mount [name]     Mount SMB shares (interactive without name)
-smb_mount umount [name]    Unmount SMB shares (interactive without name)
+gomount                  Show help (default)
+gomount list             List all configured mount points
+gomount mount [name]     Mount SMB shares (interactive without name)
+gomount umount [name]    Unmount SMB shares (interactive without name)
 
 Global Options:
-  -c, --config string   Path to config file (default: ~/.config/smb_mount_config.yaml)
+  -c, --config string   Path to config file (default: ~/.config/gomount_config.yaml)
   -h, --help            Show help
 ```
 
@@ -205,7 +205,7 @@ Global Options:
 - **Password Storage**: Avoid storing passwords in plaintext in the config file. Omit the `password` field to be prompted interactively.
 - **File Permissions**: Set restrictive permissions on your config file:
   ```bash
-  chmod 600 ~/.config/smb_mount_config.yaml
+  chmod 600 ~/.config/gomount_config.yaml
   ```
 - **Credential Files**: Temporary credential files are created with mode 0600 and deleted immediately after use.
 
@@ -244,8 +244,8 @@ make fmt
 ## Project Structure
 
 ```
-smb_mount/
-├── cmd/smb_mount/          # Application entry point
+gomount/
+├── cmd/gomount/            # Application entry point
 ├── internal/
 │   ├── config/             # Configuration management
 │   ├── mount/              # Mount/umount operations

@@ -19,7 +19,7 @@ mounts:
 
 使用:
 ```bash
-smb_mount mount nas
+gomount mount nas
 ```
 
 ## 2. SSHFS 基础配置
@@ -41,7 +41,7 @@ mounts:
 
 使用:
 ```bash
-smb_mount mount dev-server
+gomount mount dev-server
 ```
 
 ## 3. 无密码配置（推荐）
@@ -61,6 +61,6 @@ mounts:
 
 使用:
 ```bash
-smb_mount mount secure-nas
+gomount mount secure-nas
 # 程序会提示输入密码
 ```

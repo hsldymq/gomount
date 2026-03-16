@@ -2,9 +2,10 @@ package mount
 
 import (
 	"fmt"
-	"github.com/hsldymq/smb_mount/internal/config"
 	"os"
 	"os/exec"
+
+	"github.com/hsldymq/gomount/internal/config"
 )
 
 // Mount 对单个挂载条目执行挂载操作
@@ -50,7 +51,7 @@ func CreateCredentialFile(entry *config.MountEntry) (string, error) {
 // createCredentialFile 为 mount.cifs 创建临时凭据文件
 func createCredentialFile(entry *config.MountEntry) (string, error) {
 	// Create a temp file with restricted permissions
-	tmpFile, err := os.CreateTemp("", "smb_mount_creds_*.txt")
+	tmpFile, err := os.CreateTemp("", "gomount_creds_*.txt")
 	if err != nil {
 		return "", fmt.Errorf("failed to create credentials file: %w", err)
 	}

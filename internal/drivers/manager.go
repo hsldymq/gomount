@@ -6,7 +6,7 @@ import (
 	"os"
 	"sync"
 
-	"github.com/hsldymq/smb_mount/internal/config"
+	"github.com/hsldymq/gomount/internal/config"
 )
 
 // Manager 驱动管理器

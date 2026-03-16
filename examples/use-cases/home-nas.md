@@ -76,9 +76,9 @@ workspaces:
 ## 照片备份工作流
 ```bash
 # 挂载照片库
-smb_mount mount nas-photos
+gomount mount nas-photos
 # 同步照片
 rsync -av ~/Pictures/ /mnt/home/nas-photos/backup/
 # 卸载
-smb_mount umount nas-photos
+gomount umount nas-photos
 ```

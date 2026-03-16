@@ -7,9 +7,9 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/hsldymq/smb_mount/internal/config"
-	"github.com/hsldymq/smb_mount/internal/drivers"
-	"github.com/hsldymq/smb_mount/internal/mount"
+	"github.com/hsldymq/gomount/internal/config"
+	"github.com/hsldymq/gomount/internal/drivers"
+	"github.com/hsldymq/gomount/internal/mount"
 )
 
 // Driver WebDAV驱动实现

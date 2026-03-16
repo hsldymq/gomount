@@ -1,4 +1,4 @@
-module github.com/hsldymq/smb_mount
+module github.com/hsldymq/gomount
 
 go 1.24.0
 

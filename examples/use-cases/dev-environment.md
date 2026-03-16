@@ -62,14 +62,14 @@ workspaces:
 ## 典型工作流
 ### 1. 开始一天的工作
 ```bash
-smb_mount workspace dev-full
+gomount workspace dev-full
 # 进入项目目录
 cd /mnt/dev/dev-primary/my-project
 # 开始编码...
 ```
 ### 2. 查看生产日志
 ```bash
-smb_mount workspace dev-logs
+gomount workspace dev-logs
 tail -f /mnt/dev/prod-logs/app.log
 ```
 ### 3. 部署测试
@@ -81,12 +81,12 @@ scp /mnt/dev/build-share/latest/app.tar.gz dev-test:/var/www/test/
 ```
 ### 4. 结束工作
 ```bash
-smb_mount unworkspace dev-full
+gomount unworkspace dev-full
 ```
 ## VS Code 远程开发配合
 可以在 VS Code 中直接打开挂载的目录：
 ```bash
-smb_mount workspace dev-full
+gomount workspace dev-full
 code /mnt/dev/dev-primary/my-project
 ```
 这样就能用本地 VS Code 编辑远程代码。

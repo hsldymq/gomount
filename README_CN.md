@@ -1,4 +1,4 @@
-# smb_mount
+# gomount
 
 一个方便的 Linux 系统上管理 SMB/CIFS 挂载的命令行工具，提供交互式 TUI 界面。
 
@@ -17,24 +17,24 @@
 ### 从源码安装
 
 ```bash
-git clone https://github.com/hsldymq/smb_mount.git
-cd smb_mount
+git clone https://github.com/hsldymq/gomount.git
+cd gomount
 make install
 ```
 
 ### 使用 Go 安装
 
 ```bash
-go install github.com/hsldymq/smb_mount@latest
+go install github.com/hsldymq/gomount@latest
 ```
 
 ### 手动安装
 
 ```bash
-git clone https://github.com/hsldymq/smb_mount.git
-cd smb_mount
+git clone https://github.com/hsldymq/gomount.git
+cd gomount
 make build
-sudo cp bin/smb_mount /usr/local/bin/
+sudo cp bin/gomount /usr/local/bin/
 ```
 
 ## 系统要求
@@ -63,7 +63,7 @@ sudo pacman -S cifs-utils
 
 ## 配置
 
-在 `~/.config/smb_mount_config.yaml` 创建配置文件：
+在 `~/.config/gomount_config.yaml` 创建配置文件：
 
 ```yaml
 base_dir: /mnt/smb_share
@@ -98,7 +98,7 @@ mounts:
 | `mount_dir_name` | 否 | `<name>` | base_dir 内的目录名 |
 | `mount_dir_path` | 否 | - | 完整的自定义挂载路径（覆盖 base_dir 和 mount_dir_name） |
 
-示例配置文件位于 `configs/smb_mount_config.yaml.example`。
+示例配置文件位于 `configs/gomount_config.yaml.example`。
 
 ## 使用方法
 
@@ -107,9 +107,9 @@ mounts:
 显示所有配置的共享及其挂载状态：
 
 ```bash
-smb_mount list
+gomount list
 # 或
-smb_mount -l
+gomount -l
 ```
 
 ### 挂载共享
@@ -117,9 +117,9 @@ smb_mount -l
 通过名称挂载特定共享：
 
 ```bash
-smb_mount mount nas1
+gomount mount nas1
 # 或
-smb_mount -m nas1
+gomount -m nas1
 ```
 
 交互式选择（支持多选）：
@@ -127,9 +127,9 @@ smb_mount -m nas1
 - 按 `enter` 确认并挂载所有选中的共享
 
 ```bash
-smb_mount mount
+gomount mount
 # 或
-smb_mount -m
+gomount -m
 ```
 
 **注意**：挂载多个共享时，如果某个失败，其他共享会继续挂载。最后会显示汇总结果。
@@ -139,17 +139,17 @@ smb_mount -m
 通过名称卸载特定共享：
 
 ```bash
-smb_mount umount nas1
+gomount umount nas1
 # 或
-smb_mount -u nas1
+gomount -u nas1
 ```
 
 交互式选择（支持多选）：
 
 ```bash
-smb_mount umount
+gomount umount
 # 或
-smb_mount -u
+gomount -u
 ```
 
 **注意**：批量操作时即使单个操作失败也会继续执行。最后会显示成功/失败计数。
@@ -159,28 +159,28 @@ smb_mount -u
 使用来自自定义位置的配置文件：
 
 ```bash
-smb_mount -c /path/to/config.yaml list
+gomount -c /path/to/config.yaml list
 ```
 
 ### 帮助
 
 ```bash
-smb_mount --help
-smb_mount list --help
-smb_mount mount --help
-smb_mount umount --help
+gomount --help
+gomount list --help
+gomount mount --help
+gomount umount --help
 ```
 
 ## CLI 参考
 
 ```
-smb_mount                  显示帮助（默认）
-smb_mount list             列出所有配置的挂载点
-smb_mount mount [name]     挂载 SMB 共享（不带名称时为交互式）
-smb_mount umount [name]    卸载 SMB 共享（不带名称时为交互式）
+gomount                  显示帮助（默认）
+gomount list             列出所有配置的挂载点
+gomount mount [name]     挂载 SMB 共享（不带名称时为交互式）
+gomount umount [name]    卸载 SMB 共享（不带名称时为交互式）
 
 全局选项：
-  -c, --config string   配置文件路径（默认：~/.config/smb_mount_config.yaml）
+  -c, --config string   配置文件路径（默认：~/.config/gomount_config.yaml）
   -h, --help            显示帮助
 ```
 
@@ -205,7 +205,7 @@ smb_mount umount [name]    卸载 SMB 共享（不带名称时为交互式）
 - **密码存储**：避免在配置文件中以明文存储密码。省略 `password` 字段以交互式提示输入。
 - **文件权限**：为配置文件设置限制性权限：
   ```bash
-  chmod 600 ~/.config/smb_mount_config.yaml
+  chmod 600 ~/.config/gomount_config.yaml
   ```
 - **凭据文件**：临时凭据文件以 0600 权限创建，使用后立即删除。
 
@@ -244,8 +244,8 @@ make fmt
 ## 项目结构
 
 ```
-smb_mount/
-├── cmd/smb_mount/          # 应用入口点
+gomount/
+├── cmd/gomount/            # 应用入口点
 ├── internal/
 │   ├── config/             # 配置管理
 │   ├── mount/              # 挂载/卸载操作

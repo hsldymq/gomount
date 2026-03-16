@@ -6,9 +6,9 @@ import (
 	"os"
 	"os/exec"
 
-	"github.com/hsldymq/smb_mount/internal/config"
-	"github.com/hsldymq/smb_mount/internal/drivers"
-	"github.com/hsldymq/smb_mount/internal/mount"
+	"github.com/hsldymq/gomount/internal/config"
+	"github.com/hsldymq/gomount/internal/drivers"
+	"github.com/hsldymq/gomount/internal/mount"
 )
 
 // Driver SMB驱动实现
@@ -144,7 +144,7 @@ func (d *Driver) Validate(entry *config.MountEntry) error {
 // createCredentialFile 创建临时凭据文件
 func (d *Driver) createCredentialFile(entry *config.MountEntry) (string, error) {
 	// 创建临时文件
-	tmpFile, err := os.CreateTemp("", "smb_mount_creds_*.txt")
+	tmpFile, err := os.CreateTemp("", "gomount_creds_*.txt")
 	if err != nil {
 		return "", fmt.Errorf("failed to create credentials file: %w", err)
 	}

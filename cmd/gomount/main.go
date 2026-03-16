@@ -5,14 +5,14 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/hsldymq/smb_mount/internal/config"
-	"github.com/hsldymq/smb_mount/internal/drivers"
-	smbDriver "github.com/hsldymq/smb_mount/internal/drivers/smb"
-	sshfsDriver "github.com/hsldymq/smb_mount/internal/drivers/sshfs"
-	webdavDriver "github.com/hsldymq/smb_mount/internal/drivers/webdav"
-	"github.com/hsldymq/smb_mount/internal/interaction"
-	"github.com/hsldymq/smb_mount/internal/mount"
-	"github.com/hsldymq/smb_mount/internal/tui"
+	"github.com/hsldymq/gomount/internal/config"
+	"github.com/hsldymq/gomount/internal/drivers"
+	smbDriver "github.com/hsldymq/gomount/internal/drivers/smb"
+	sshfsDriver "github.com/hsldymq/gomount/internal/drivers/sshfs"
+	webdavDriver "github.com/hsldymq/gomount/internal/drivers/webdav"
+	"github.com/hsldymq/gomount/internal/interaction"
+	"github.com/hsldymq/gomount/internal/mount"
+	"github.com/hsldymq/gomount/internal/tui"
 	"github.com/spf13/cobra"
 )
 
@@ -21,9 +21,9 @@ var (
 )
 
 var rootCmd = &cobra.Command{
-	Use:   "smb_mount",
+	Use:   "gomount",
 	Short: "便捷的 SMB/CIFS 挂载管理工具",
-	Long: `smb_mount 是一个用于管理 Linux 系统 SMB/CIFS 共享的 CLI 工具。
+	Long: `gomount 是一个用于管理 Linux 系统 SMB/CIFS 共享的 CLI 工具。
 它提供了挂载和卸载 SMB 共享的交互界面，
 可配置选项存储在 YAML 文件中。`,
 	Run: func(cmd *cobra.Command, args []string) {

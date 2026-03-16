@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/hsldymq/smb_mount/internal/config"
-	"github.com/hsldymq/smb_mount/internal/drivers"
+	"github.com/hsldymq/gomount/internal/config"
+	"github.com/hsldymq/gomount/internal/drivers"
 )
 
 // Manager 工作区管理器

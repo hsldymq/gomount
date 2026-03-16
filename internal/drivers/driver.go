@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/hsldymq/smb_mount/internal/config"
+	"github.com/hsldymq/gomount/internal/config"
 )
 
 // Driver 驱动接口，所有挂载驱动必须实现

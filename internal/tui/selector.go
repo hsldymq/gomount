@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/hsldymq/smb_mount/internal/config"
+	"github.com/hsldymq/gomount/internal/config"
 )
 
 // SelectionResult 是选择的结果

@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hsldymq/smb_mount/internal/config"
+	"github.com/hsldymq/gomount/internal/config"
 )
 
 func TestDriver_Type(t *testing.T) {
@@ -98,9 +98,9 @@ func TestDriver_buildMountCommand(t *testing.T) {
 		{
 			name: "basic sshfs",
 			entry: &config.MountEntry{
-				Name:            "test",
-				SSH:             &config.SSHConfig{Host: "example.com", User: "user"},
-				RemotePath:      "/home/user/data",
+				Name:         "test",
+				SSH:          &config.SSHConfig{Host: "example.com", User: "user"},
+				RemotePath:   "/home/user/data",
 				MountDirPath: "/mnt/test",
 			},
 			expectRemote:  "user@example.com:/home/user/data",
@@ -109,9 +109,9 @@ func TestDriver_buildMountCommand(t *testing.T) {
 		{
 			name: "sshfs with custom port",
 			entry: &config.MountEntry{
-				Name:            "test",
-				SSH:             &config.SSHConfig{Host: "example.com", User: "user", Port: 2222},
-				RemotePath:      "/data",
+				Name:         "test",
+				SSH:          &config.SSHConfig{Host: "example.com", User: "user", Port: 2222},
+				RemotePath:   "/data",
 				MountDirPath: "/mnt/test",
 			},
 			expectRemote:  "user@example.com:/data",
@@ -120,9 +120,9 @@ func TestDriver_buildMountCommand(t *testing.T) {
 		{
 			name: "sshfs with key file",
 			entry: &config.MountEntry{
-				Name:            "test",
-				SSH:             &config.SSHConfig{Host: "example.com", User: "user", KeyFile: "~/.ssh/id_rsa"},
-				RemotePath:      "/data",
+				Name:         "test",
+				SSH:          &config.SSHConfig{Host: "example.com", User: "user", KeyFile: "~/.ssh/id_rsa"},
+				RemotePath:   "/data",
 				MountDirPath: "/mnt/test",
 			},
 			expectRemote:  "user@example.com:/data",

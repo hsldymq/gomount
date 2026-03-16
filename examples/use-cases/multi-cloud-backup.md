@@ -57,7 +57,7 @@ workspaces:
 ## 备份工作流
 ### 1. 挂载所有云存储
 ```bash
-smb_mount workspace all-clouds
+gomount workspace all-clouds
 ```
 ### 2. 使用 rclone 同步
 ```bash
@@ -92,7 +92,7 @@ set -e
 LOG_FILE="/var/log/cloud-backup-$(date +%Y%m%d).log"
 echo "[$(date)] Starting cloud backup..." | tee -a $LOG_FILE
 # 挂载所有云存储
-smb_mount workspace all-clouds || {
+gomount workspace all-clouds || {
   echo "[$(date)] Failed to mount cloud storages" | tee -a $LOG_FILE
   exit 1
 }
@@ -106,7 +106,7 @@ for cloud in cloud-nextcloud cloud-jianguoyun cloud-dropbox; do
 done
 # 卸载
 echo "[$(date)] Unmounting..." | tee -a $LOG_FILE
-smb_mount unworkspace all-clouds
+gomount unworkspace all-clouds
 echo "[$(date)] Backup completed!" | tee -a $LOG_FILE
 ```
 ### 5. 添加定时任务

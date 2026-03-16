@@ -1,9 +1,9 @@
 .PHONY: build clean install test lint fmt vet run help
 
 # Build variables
-BINARY_NAME=smb_mount
+BINARY_NAME=gomount
 BUILD_DIR=bin
-CMD_DIR=cmd/smb_mount
+CMD_DIR=cmd/gomount
 GO=go
 GOFLAGS=-v
 

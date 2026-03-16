@@ -53,12 +53,12 @@ workspaces:
 ## 每日工作流
 ```bash
 # 早上开始工作
-smb_mount workspace work-mode
+gomount workspace work-mode
 # 查看挂载状态
-smb_mount list
+gomount list
 # ... 工作一整天 ...
 # 下班
-smb_mount unworkspace work-mode
+gomount unworkspace work-mode
 ```
 ## SSH 隧道版本（适用于无 VPN）
 如果公司没有 VPN，但有跳板机：
