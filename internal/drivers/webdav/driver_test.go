@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hsldymq/smb_mount/internal/config"
+	"github.com/hsldymq/gomount/internal/config"
 )
 
 func TestDriver_Type(t *testing.T) {
@@ -78,8 +78,8 @@ func TestDriver_buildMountCommand(t *testing.T) {
 		{
 			name: "basic webdav",
 			entry: &config.MountEntry{
-				Name:            "test",
-				WebDAV:          &config.WebDAVConfig{URL: "https://cloud.example.com/dav"},
+				Name:         "test",
+				WebDAV:       &config.WebDAVConfig{URL: "https://cloud.example.com/dav"},
 				MountDirPath: "/mnt/webdav",
 			},
 			expectURL:     "https://cloud.example.com/dav",
@@ -89,8 +89,8 @@ func TestDriver_buildMountCommand(t *testing.T) {
 		{
 			name: "webdav with auth",
 			entry: &config.MountEntry{
-				Name:            "test",
-				WebDAV:          &config.WebDAVConfig{URL: "https://cloud.example.com/dav", Username: "user", Password: "secret"},
+				Name:         "test",
+				WebDAV:       &config.WebDAVConfig{URL: "https://cloud.example.com/dav", Username: "user", Password: "secret"},
 				MountDirPath: "/mnt/webdav",
 			},
 			expectURL:     "https://cloud.example.com/dav",
@@ -100,8 +100,8 @@ func TestDriver_buildMountCommand(t *testing.T) {
 		{
 			name: "webdav with custom options",
 			entry: &config.MountEntry{
-				Name:            "test",
-				WebDAV:          &config.WebDAVConfig{URL: "https://cloud.example.com/dav"},
+				Name:         "test",
+				WebDAV:       &config.WebDAVConfig{URL: "https://cloud.example.com/dav"},
 				MountDirPath: "/mnt/webdav",
 				Options: map[string]interface{}{
 					"file_mode": "0644",

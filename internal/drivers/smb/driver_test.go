@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hsldymq/smb_mount/internal/config"
+	"github.com/hsldymq/gomount/internal/config"
 )
 
 func TestDriver_Type(t *testing.T) {
@@ -75,12 +75,12 @@ func TestDriver_Validate(t *testing.T) {
 func TestDriver_buildMountCommand(t *testing.T) {
 	d := NewDriver()
 	entry := &config.MountEntry{
-		Name:            "test",
-		SMBAddr:         "192.168.1.100",
-		SMBPort:         445,
-		ShareName:       "shared",
-		Username:        "user",
-		Password:        "pass",
+		Name:         "test",
+		SMBAddr:      "192.168.1.100",
+		SMBPort:      445,
+		ShareName:    "shared",
+		Username:     "user",
+		Password:     "pass",
 		MountDirPath: "/mnt/test",
 	}
 
