@@ -1,13 +1,14 @@
 package interaction
 
 import (
-	"bufio"
 	"bytes"
 	"fmt"
 	"os"
 	"os/exec"
 	"os/user"
 	"strings"
+
+	"golang.org/x/term"
 )
 
 func IsRoot() bool {
@@ -34,24 +35,17 @@ func CanSudoWithoutPassword() bool {
 }
 
 func PromptSudoPassword() (string, error) {
-	fmt.Fprintln(os.Stderr)
-	fmt.Fprintln(os.Stderr, "╔════════════════════════════════════════════════════════════╗")
-	fmt.Fprintln(os.Stderr, "║  需要管理员权限才能挂载文件系统                              ║")
-	fmt.Fprintln(os.Stderr, "╠════════════════════════════════════════════════════════════╣")
-	fmt.Fprintln(os.Stderr, "║  请输入您的 sudo 密码                                        ║")
-	fmt.Fprintln(os.Stderr, "║  （输入时不会显示任何字符，输入完成后按回车）                  ║")
-	fmt.Fprintln(os.Stderr, "╚════════════════════════════════════════════════════════════╝")
+	fmt.Fprintln(os.Stderr, "\nsudo 密码 (输入时不显示): ")
 	fmt.Fprint(os.Stderr, "密码: ")
 	os.Stderr.Sync()
 
-	reader := bufio.NewReader(os.Stdin)
-	password, err := reader.ReadString('\n')
+	passwordBytes, err := term.ReadPassword(int(os.Stdin.Fd()))
+	fmt.Fprintln(os.Stderr)
 	if err != nil {
 		return "", err
 	}
 
-	password = strings.TrimSpace(password)
-	fmt.Fprintln(os.Stderr)
+	password := strings.TrimSpace(string(passwordBytes))
 
 	return password, nil
 }
