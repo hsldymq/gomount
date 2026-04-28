@@ -25,7 +25,7 @@ make install
 ### Using Go
 
 ```bash
-go install github.com/hsldymq/gomount@latest
+go install github.com/hsldymq/gomount/cmd/gomount@latest
 ```
 
 ### Manual Installation
