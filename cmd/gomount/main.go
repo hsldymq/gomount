@@ -209,10 +209,17 @@ func runMount(cmd *cobra.Command, args []string) error {
 			continue
 		}
 
-		fmt.Printf("  From: //%s:%d/%s\n", entry.SMB.Addr, entry.SMB.GetPort(), entry.SMB.ShareName)
-		fmt.Printf("  To: %s\n", entry.MountDirPath)
-
 		driverType := getDriverType(entry)
+
+		switch driverType {
+		case "smb":
+			fmt.Printf("  From: //%s:%d/%s\n", entry.SMB.Addr, entry.SMB.GetPort(), entry.SMB.ShareName)
+		case "sshfs":
+			fmt.Printf("  From: %s:%s\n", entry.SSHFS.Host, entry.SSHFS.RemotePath)
+		case "webdav":
+			fmt.Printf("  From: %s\n", entry.WebDAV.URL)
+		}
+		fmt.Printf("  To: %s\n", entry.MountDirPath)
 
 		if err := mgr.Mount(ctx, entry.Name); err != nil {
 			// 对于 SMB 驱动，尝试使用 sudo
