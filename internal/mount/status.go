@@ -48,27 +48,3 @@ func RefreshAllStatus(cfg *config.Config) error {
 	}
 	return nil
 }
-
-// GetMountInfo 获取路径的详细挂载信息
-func GetMountInfo(mountPath string) (*mountinfo.Info, error) {
-	// Get all mount points
-	mounts, err := mountinfo.GetMounts(mountinfo.PrefixFilter(mountPath))
-	if err != nil {
-		return nil, fmt.Errorf("failed to get mount info: %w", err)
-	}
-
-	if len(mounts) == 0 {
-		return nil, fmt.Errorf("not mounted")
-	}
-
-	return mounts[0], nil
-}
-
-// isSubPath 检查 path 是否是 base 的子路径
-func isSubPath(path, base string) bool {
-	rel, err := filepath.Rel(base, path)
-	if err != nil {
-		return false
-	}
-	return !filepath.HasPrefix(rel, "..")
-}

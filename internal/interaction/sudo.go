@@ -108,24 +108,3 @@ func runSudoCommand(cmd *exec.Cmd, password string) error {
 
 	return nil
 }
-
-func RunWithSudoSilent(cmd *exec.Cmd) error {
-	if IsRoot() {
-		return cmd.Run()
-	}
-
-	if !HasSudo() {
-		return fmt.Errorf("privilege escalation required but sudo is not available")
-	}
-
-	sudoArgs := []string{"-S", "-p", ""}
-	sudoArgs = append(sudoArgs, cmd.Path)
-	sudoArgs = append(sudoArgs, cmd.Args[1:]...)
-
-	sudoCmd := exec.Command("sudo", sudoArgs...)
-	sudoCmd.Stdin = os.Stdin
-	sudoCmd.Stdout = cmd.Stdout
-	sudoCmd.Stderr = cmd.Stderr
-
-	return sudoCmd.Run()
-}
