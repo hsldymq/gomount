@@ -161,10 +161,11 @@ func (d *Driver) createCredentialFile(entry *config.MountEntry) (string, error) 
 }
 
 func (d *Driver) buildMountCommand(entry *config.MountEntry, credsFile string) *exec.Cmd {
-	smbAddr := fmt.Sprintf("//%s:%d/%s", entry.SMB.Addr, entry.SMB.GetPort(), entry.SMB.ShareName)
+	smbAddr := fmt.Sprintf("//%s/%s", entry.SMB.Addr, entry.SMB.ShareName)
 
-	options := fmt.Sprintf("credentials=%s,file_mode=0755,dir_mode=0755,uid=%d,gid=%d",
+	options := fmt.Sprintf("credentials=%s,port=%d,file_mode=0755,dir_mode=0755,uid=%d,gid=%d",
 		credsFile,
+		entry.SMB.GetPort(),
 		os.Getuid(),
 		os.Getgid(),
 	)
