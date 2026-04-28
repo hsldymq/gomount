@@ -4,21 +4,13 @@ import "fmt"
 
 // Config 主配置结构
 type Config struct {
-	Mounts     []MountEntry `yaml:"mounts" mapstructure:"mounts" validate:"required,min=1"`
-	Workspaces []Workspace  `yaml:"workspaces,omitempty" mapstructure:"workspaces"`
-}
-
-// Workspace 挂载组/工作区
-type Workspace struct {
-	Name        string   `yaml:"name" mapstructure:"name" validate:"required"`
-	Description string   `yaml:"description,omitempty" mapstructure:"description"`
-	Mounts      []string `yaml:"mounts" mapstructure:"mounts" validate:"required,min=1"`
+	Mounts []MountEntry `yaml:"mounts" mapstructure:"mounts" validate:"required,min=1"`
 }
 
 // MountEntry 单个挂载配置（支持多种协议）
 type MountEntry struct {
 	Name         string `yaml:"name" mapstructure:"name" validate:"required"`
-	Type         string `yaml:"type,omitempty" mapstructure:"type"`
+	Type         string `yaml:"type" mapstructure:"type" validate:"required"`
 	MountDirPath string `yaml:"mount_dir_path" mapstructure:"mount_dir_path" validate:"required"`
 
 	SMB    *SMBConfig    `yaml:"smb,omitempty" mapstructure:"smb"`
@@ -83,10 +75,6 @@ func (m *MountEntry) ValidateDriverConfig() error {
 	case "webdav":
 		if m.WebDAV == nil {
 			return fmt.Errorf("mount entry '%s': type is 'webdav' but 'webdav' config is missing", m.Name)
-		}
-	case "":
-		if m.SMB == nil && m.SSHFS == nil && m.WebDAV == nil {
-			return fmt.Errorf("mount entry '%s': no driver config provided (need one of: smb, sshfs, webdav)", m.Name)
 		}
 	default:
 		return fmt.Errorf("mount entry '%s': unknown type '%s'", m.Name, m.Type)

@@ -60,6 +60,16 @@ var umountCmd = &cobra.Command{
 	RunE: runUmount,
 }
 
+var configExampleCmd = &cobra.Command{
+	Use:     "config-example",
+	Aliases: []string{"ce"},
+	Short:   "输出配置文件示例",
+	Long:    `输出一个包含所有挂载类型的配置文件示例，可重定向到文件使用。`,
+	Run: func(cmd *cobra.Command, args []string) {
+		fmt.Fprint(os.Stdout, configExample)
+	},
+}
+
 func init() {
 	rootCmd.PersistentFlags().StringVarP(&configPath, "config", "c", "",
 		fmt.Sprintf("配置文件路径 (默认: %s)", config.DefaultConfigPath()))
@@ -67,6 +77,7 @@ func init() {
 	rootCmd.AddCommand(listCmd)
 	rootCmd.AddCommand(mountCmd)
 	rootCmd.AddCommand(umountCmd)
+	rootCmd.AddCommand(configExampleCmd)
 }
 
 func main() {
@@ -123,18 +134,9 @@ func prepareMountEntry(entry *config.MountEntry) error {
 	return nil
 }
 
-// getDriverType 检测条目使用的驱动类型
+// getDriverType 返回条目的驱动类型
 func getDriverType(entry *config.MountEntry) string {
-	if entry.Type != "" {
-		return entry.Type
-	}
-	if entry.SSHFS != nil && entry.SSHFS.Host != "" {
-		return "sshfs"
-	}
-	if entry.WebDAV != nil && entry.WebDAV.URL != "" {
-		return "webdav"
-	}
-	return "smb"
+	return entry.Type
 }
 
 // runList 实现列表命令
@@ -361,3 +363,57 @@ func umountWithSudo(mountPath string) error {
 
 	return nil
 }
+
+const configExample = `# gomount 配置文件示例
+# 复制到 ~/.config/gomount_config.yaml 并根据需要修改
+# 使用: gomount config-example > ~/.config/gomount_config.yaml
+
+mounts:
+  # SMB/CIFS 挂载
+  - name: nas
+    type: smb
+    smb:
+      addr: 192.168.1.100           # SMB 服务器地址
+      # port: 445                   # 可选，默认 445
+      share_name: shared_folder
+      username: user
+      # password: pass              # 可选，不填则挂载时交互式输入
+    mount_dir_path: /mnt/nas
+
+  # SSHFS 挂载
+  # 连接细节（用户名、端口、密钥等）由 ~/.ssh/config 管理
+  - name: dev-server
+    type: sshfs
+    sshfs:
+      host: dev.example.com         # ~/.ssh/config 别名或直接 hostname
+      remote_path: /home/user/projects
+    mount_dir_path: /mnt/dev
+
+  # SSHFS 通过跳板机（在 ~/.ssh/config 中配置 ProxyJump）
+  # ~/.ssh/config 示例:
+  #   Host internal-server
+  #     HostName 192.168.1.50
+  #     User developer
+  #     ProxyJump bastion.example.com
+  #     IdentityFile ~/.ssh/id_rsa
+  #
+  # - name: internal-server
+  #   type: sshfs
+  #   sshfs:
+  #     host: internal-server
+  #     remote_path: /data/shared
+  #   mount_dir_path: /mnt/internal
+
+  # WebDAV 挂载
+  - name: cloud
+    type: webdav
+    webdav:
+      url: https://cloud.example.com/remote.php/dav/files/user/
+      username: user
+      # password: pass
+    mount_dir_path: /mnt/cloud
+
+# 提示:
+#   - mount_dir_path 支持 ~ 展开为用户主目录
+#   - 建议设置配置文件权限: chmod 600 ~/.config/gomount_config.yaml
+`

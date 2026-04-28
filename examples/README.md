@@ -60,17 +60,10 @@ gomount umount nas
 ### 基础配置结构
 
 ```yaml
-
 mounts:
   - name: entry1       # 挂载条目名称（唯一标识）
-    type: smb          # 驱动类型（可选，自动检测）
+    type: smb          # 驱动类型（必填）
     # ... 驱动特定配置
-
-workspaces:
-  - name: workspace1   # 工作区名称
-    mounts:            # 包含的挂载条目列表
-      - entry1
-      - entry2
 ```
 
 ### 各协议配置示例
@@ -125,22 +118,38 @@ mounts:
 ### 场景1：公司开发环境
 
 ```yaml
-workspaces:
-  - name: company-dev
-    description: "公司开发环境"
-    mounts:
-      - nas              # 公司文件服务器
-      - dev-server       # 开发服务器
-      - gitlab           # GitLab仓库
+mounts:
+  - name: nas
+    type: smb
+    smb:
+      addr: fs.company.local
+      share_name: shared
+      username: developer
+
+  - name: dev-server
+    type: sshfs
+    sshfs:
+      host: dev.company.com
+      remote_path: /home/dev/projects
+
+  - name: gitlab
+    type: webdav
+    webdav:
+      url: https://gitlab.company.com/dav
+      username: developer
 ```
 
 使用方法：
 ```bash
-# 一键挂载整个开发环境
-gomount workspace company-dev
+# 挂载开发环境所需资源
+gomount mount nas
+gomount mount dev-server
+gomount mount gitlab
 
-# 下班一键卸载
-gomount unworkspace company-dev
+# 下班卸载
+gomount umount nas
+gomount umount dev-server
+gomount umount gitlab
 ```
 
 ### 场景2：远程访问家里NAS
@@ -172,12 +181,6 @@ mounts:
     webdav:
       url: https://cloud.company.com/dav
       username: work
-
-workspaces:
-  - name: all-cloud
-    mounts:
-      - nextcloud-personal
-      - nextcloud-work
 ```
 
 ---
@@ -223,5 +226,5 @@ sudo usermod -aG fuse $USER
 查看 [examples/](./) 目录下的具体配置文件：
 
 - [basic/](./basic/) - 基础配置示例
-- [advanced/](./advanced/) - 高级配置（工作区、SSH隧道等）
+- [advanced/](./advanced/) - 高级配置（SSH隧道等）
 - [use-cases/](./use-cases/) - 具体使用场景配置

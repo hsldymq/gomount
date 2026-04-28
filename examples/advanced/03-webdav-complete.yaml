@@ -26,11 +26,3 @@ mounts:
       username: user
       password: pass
     mount_dir_path: /mnt/seafile
-
-workspaces:
-  - name: all-cloud
-    description: "所有云存储服务"
-    mounts:
-      - nextcloud
-      - jianguoyun
-      - seafile

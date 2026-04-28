@@ -1,10 +1,11 @@
 # gomount
 
-一个方便的 Linux 系统上管理 SMB/CIFS 挂载的命令行工具，提供交互式 TUI 界面。
+一个方便的 Linux 系统上管理 SMB/CIFS、SSHFS 和 WebDAV 挂载的命令行工具，提供交互式 TUI 界面。
 
 ## 特性
 
-- **简单配置**：在单个 YAML 文件中定义所有 SMB 共享
+- **简单配置**：在单个 YAML 文件中定义所有挂载
+- **多协议支持**：支持 SMB/CIFS、SSHFS 和 WebDAV
 - **交互式 TUI**：美观的终端界面用于浏览和选择共享
 - **挂载状态跟踪**：查看当前已挂载的共享
 - **交互式选择**：轻松选择挂载/卸载操作
@@ -40,7 +41,9 @@ sudo cp bin/gomount /usr/local/bin/
 ## 系统要求
 
 - Linux 操作系统
-- `mount.cifs` 命令（需安装 `cifs-utils` 软件包）
+- `mount.cifs` 命令（需安装 `cifs-utils` 软件包）— 用于 SMB 挂载
+- `sshfs` 命令 — 用于 SSHFS 挂载
+- `mount.davfs` 命令（需安装 `davfs2` 软件包）— 用于 WebDAV 挂载
 - 挂载操作需要 `sudo` 权限
 - Go 1.25+ （从源码构建时需要）
 
@@ -48,17 +51,17 @@ sudo cp bin/gomount /usr/local/bin/
 
 在 Debian/Ubuntu 上：
 ```bash
-sudo apt-get install cifs-utils
+sudo apt-get install cifs-utils sshfs davfs2
 ```
 
 在 Fedora/RHEL 上：
 ```bash
-sudo dnf install cifs-utils
+sudo dnf install cifs-utils fuse-sshfs davfs2
 ```
 
 在 Arch Linux 上：
 ```bash
-sudo pacman -S cifs-utils
+sudo pacman -S cifs-utils sshfs davfs2
 ```
 
 ## 配置
@@ -66,44 +69,77 @@ sudo pacman -S cifs-utils
 在 `~/.config/gomount_config.yaml` 创建配置文件：
 
 ```yaml
-base_dir: /mnt/smb_share
-
 mounts:
-  - name: nas1
+  # SMB/CIFS 挂载
+  - name: nas
     type: smb
     smb:
-      addr: 10.0.1.2
-      port: 445
+      addr: 192.168.1.100
+      # port: 445                   # 可选，默认 445
       share_name: shared_folder
-      username: user1
-      password: pass1          # 可选，如省略将提示输入
-    mount_dir_name: nas1_mount
+      username: user
+      # password: pass              # 可选，不填则挂载时交互式输入
+    mount_dir_path: /mnt/nas
 
-  - name: media_server
-    type: smb
-    smb:
-      addr: 10.0.1.3
-      share_name: media
-      username: user2
-      # 密码未存储 - 挂载时会提示
-    mount_dir_path: /mnt/media
+  # SSHFS 挂载
+  # 连接细节（用户名、端口、密钥等）由 ~/.ssh/config 管理
+  - name: dev-server
+    type: sshfs
+    sshfs:
+      host: dev.example.com         # ~/.ssh/config 别名或直接 hostname
+      remote_path: /home/user/projects
+    mount_dir_path: /mnt/dev
+
+  # WebDAV 挂载
+  - name: cloud
+    type: webdav
+    webdav:
+      url: https://cloud.example.com/remote.php/dav/files/user/
+      username: user
+      # password: pass
+    mount_dir_path: /mnt/cloud
+```
+
+可以使用以下命令生成完整的配置文件示例：
+
+```bash
+gomount config-example > ~/.config/gomount_config.yaml
 ```
 
 ### 配置选项
 
+#### 通用字段
+
 | 字段 | 必需 | 默认值 | 描述 |
 |-----|------|--------|------|
 | `name` | 是 | - | 此挂载的唯一标识符 |
-| `type` | 否 | auto | 挂载类型（smb, sshfs, webdav） |
+| `type` | 是 | - | 挂载类型（`smb`、`sshfs`、`webdav`）。 |
+| `mount_dir_path` | 是 | - | 挂载点的完整本地路径。支持 `~` 展开。 |
+
+#### SMB（`smb:` 块）
+
+| 字段 | 必需 | 默认值 | 描述 |
+|-----|------|--------|------|
 | `smb.addr` | 是 | - | SMB 服务器地址 |
 | `smb.port` | 否 | 445 | SMB 服务器端口 |
 | `smb.share_name` | 是 | - | 服务器上的共享名称 |
 | `smb.username` | 是 | - | 登录用户名 |
 | `smb.password` | 否 | - | 登录密码（为空时提示输入） |
-| `mount_dir_name` | 否 | `<name>` | base_dir 内的目录名 |
-| `mount_dir_path` | 否 | - | 完整的自定义挂载路径（覆盖 base_dir 和 mount_dir_name） |
 
-示例配置文件位于 `configs/gomount_config.yaml.example`。
+#### SSHFS（`sshfs:` 块）
+
+| 字段 | 必需 | 默认值 | 描述 |
+|-----|------|--------|------|
+| `sshfs.host` | 是 | - | SSH 主机名或 `~/.ssh/config` 别名 |
+| `sshfs.remote_path` | 是 | - | 要挂载的远程目录路径 |
+
+#### WebDAV（`webdav:` 块）
+
+| 字段 | 必需 | 默认值 | 描述 |
+|-----|------|--------|------|
+| `webdav.url` | 是 | - | WebDAV 服务器 URL |
+| `webdav.username` | 否 | - | 登录用户名 |
+| `webdav.password` | 否 | - | 登录密码（为空时提示输入） |
 
 ## 使用方法
 
@@ -179,10 +215,11 @@ gomount umount --help
 ## CLI 参考
 
 ```
-gomount                  显示帮助（默认）
-gomount list             列出所有配置的挂载点
-gomount mount [name]     挂载 SMB 共享（不带名称时为交互式）
-gomount umount [name]    卸载 SMB 共享（不带名称时为交互式）
+gomount                          显示帮助（默认）
+gomount list                     列出所有配置的挂载点
+gomount mount [name]             挂载共享（不带名称时为交互式）
+gomount umount [name]            卸载共享（不带名称时为交互式）
+gomount config-example           输出配置文件示例
 
 全局选项：
   -c, --config string   配置文件路径（默认：~/.config/gomount_config.yaml）
@@ -254,10 +291,10 @@ gomount/
 ├── internal/
 │   ├── config/             # 配置管理
 │   ├── mount/              # 挂载/卸载操作
+│   ├── drivers/            # 协议驱动（smb、sshfs、webdav）
 │   ├── tui/                # 终端 UI 组件
-│   ├── prompt/             # 交互式提示
+│   ├── interaction/        # 交互式提示和 Sudo 处理
 │   └── privilege/          # Sudo 处理
-├── pkg/smb/                # 公共类型和错误
 ├── configs/                # 示例配置
 ├── Makefile                # 构建自动化
 └── README.md

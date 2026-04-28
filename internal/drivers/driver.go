@@ -68,41 +68,17 @@ func (r *DriverRegistry) Get(driverType string) (Driver, bool) {
 	return d, ok
 }
 
-// Detect 自动检测并返回合适的驱动
-// 根据MountEntry的字段自动推断驱动类型
+// Detect 根据type字段返回对应的驱动
 func (r *DriverRegistry) Detect(entry *config.MountEntry) (Driver, error) {
-	// 1. 优先使用显式声明的type字段
-	if entry.Type != "" {
-		if d, ok := r.drivers[entry.Type]; ok {
-			return d, nil
-		}
-		return nil, fmt.Errorf("unknown driver type: %s", entry.Type)
+	if entry.Type == "" {
+		return nil, fmt.Errorf("mount entry '%s': type is required", entry.Name)
 	}
 
-	// 2. 向后兼容：根据字段自动推断
-
-	// SSHFS: 有SSHFS配置
-	if entry.SSHFS != nil && entry.SSHFS.Host != "" {
-		if d, ok := r.drivers["sshfs"]; ok {
-			return d, nil
-		}
+	d, ok := r.drivers[entry.Type]
+	if !ok {
+		return nil, fmt.Errorf("mount entry '%s': unknown driver type '%s'", entry.Name, entry.Type)
 	}
-
-	// WebDAV: 有WebDAV配置
-	if entry.WebDAV != nil && entry.WebDAV.URL != "" {
-		if d, ok := r.drivers["webdav"]; ok {
-			return d, nil
-		}
-	}
-
-	// SMB: 有SMB配置
-	if entry.SMB != nil && entry.SMB.Addr != "" {
-		if d, ok := r.drivers["smb"]; ok {
-			return d, nil
-		}
-	}
-
-	return nil, fmt.Errorf("cannot determine driver for entry: %s", entry.Name)
+	return d, nil
 }
 
 // List 返回所有已注册的驱动类型

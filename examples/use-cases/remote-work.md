@@ -36,29 +36,22 @@ mounts:
     webdav:
       url: https://wiki.company.com/dav
       username: $USER
-workspaces:
-  - name: work-mode
-    description: "完整办公环境"
-    mounts:
-      - corp-files
-      - dept-storage
-      - dev-box
-      - wiki
-  - name: work-minimal
-    description: "轻量级办公（仅必需资源）"
-    mounts:
-      - corp-files
-      - dev-box
 ```
 ## 每日工作流
 ```bash
 # 早上开始工作
-gomount workspace work-mode
+gomount mount corp-files
+gomount mount dept-storage
+gomount mount dev-box
+gomount mount wiki
 # 查看挂载状态
 gomount list
 # ... 工作一整天 ...
 # 下班
-gomount unworkspace work-mode
+gomount umount corp-files
+gomount umount dept-storage
+gomount umount dev-box
+gomount umount wiki
 ```
 ## 通过跳板机访问（适用于无 VPN）
 如果公司没有 VPN，但有跳板机，在 `~/.ssh/config` 中配置 ProxyJump 即可：

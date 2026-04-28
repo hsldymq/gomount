@@ -41,30 +41,21 @@ mounts:
     webdav:
       url: https://gerrit.company.com/dav
       username: developer
-workspaces:
-  - name: dev-full
-    description: "完整开发环境"
-    mounts:
-      - dev-primary
-      - dev-test
-      - build-share
-      - gerrit
-  - name: dev-logs
-    description: "仅日志查看"
-    mounts:
-      - prod-logs
 ```
 ## 典型工作流
 ### 1. 开始一天的工作
 ```bash
-gomount workspace dev-full
+gomount mount dev-primary
+gomount mount dev-test
+gomount mount build-share
+gomount mount gerrit
 # 进入项目目录
 cd /mnt/dev/dev-primary/my-project
 # 开始编码...
 ```
 ### 2. 查看生产日志
 ```bash
-gomount workspace dev-logs
+gomount mount prod-logs
 tail -f /mnt/dev/prod-logs/app.log
 ```
 ### 3. 部署测试
@@ -76,12 +67,15 @@ scp /mnt/dev/build-share/latest/app.tar.gz dev-test:/var/www/test/
 ```
 ### 4. 结束工作
 ```bash
-gomount unworkspace dev-full
+gomount umount dev-primary
+gomount umount dev-test
+gomount umount build-share
+gomount umount gerrit
 ```
 ## VS Code 远程开发配合
 可以在 VS Code 中直接打开挂载的目录：
 ```bash
-gomount workspace dev-full
+gomount mount dev-primary
 code /mnt/dev/dev-primary/my-project
 ```
 这样就能用本地 VS Code 编辑远程代码。

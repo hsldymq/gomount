@@ -40,25 +40,14 @@ mounts:
     webdav:
       url: http://localhost:8002/
       username: user
-workspaces:
-  - name: all-clouds
-    description: "所有云端存储"
-    mounts:
-      - cloud-nextcloud
-      - cloud-jianguoyun
-      - cloud-dropbox
-      - cloud-onedrive
-  - name: backup-targets
-    description: "备份目标（排除本地）"
-    mounts:
-      - cloud-nextcloud
-      - cloud-jianguoyun
-      - cloud-dropbox
 ```
 ## 备份工作流
 ### 1. 挂载所有云存储
 ```bash
-gomount workspace all-clouds
+gomount mount cloud-nextcloud
+gomount mount cloud-jianguoyun
+gomount mount cloud-dropbox
+gomount mount cloud-onedrive
 ```
 ### 2. 使用 rclone 同步
 ```bash
@@ -93,10 +82,12 @@ set -e
 LOG_FILE="/var/log/cloud-backup-$(date +%Y%m%d).log"
 echo "[$(date)] Starting cloud backup..." | tee -a $LOG_FILE
 # 挂载所有云存储
-gomount workspace all-clouds || {
-  echo "[$(date)] Failed to mount cloud storages" | tee -a $LOG_FILE
-  exit 1
-}
+for cloud in cloud-nextcloud cloud-jianguoyun cloud-dropbox cloud-onedrive; do
+  gomount mount "$cloud" || {
+    echo "[$(date)] Failed to mount $cloud" | tee -a $LOG_FILE
+    exit 1
+  }
+done
 # 备份到各个云端
 for cloud in cloud-nextcloud cloud-jianguoyun cloud-dropbox; do
   echo "[$(date)] Syncing to $cloud..." | tee -a $LOG_FILE
@@ -106,8 +97,10 @@ for cloud in cloud-nextcloud cloud-jianguoyun cloud-dropbox; do
     2>&1 | tee -a $LOG_FILE
 done
 # 卸载
-echo "[$(date)] Unmounting..." | tee -a $LOG_FILE
-gomount unworkspace all-clouds
+for cloud in cloud-nextcloud cloud-jianguoyun cloud-dropbox cloud-onedrive; do
+  echo "[$(date)] Unmounting $cloud..." | tee -a $LOG_FILE
+  gomount umount "$cloud"
+done
 echo "[$(date)] Backup completed!" | tee -a $LOG_FILE
 ```
 ### 5. 添加定时任务

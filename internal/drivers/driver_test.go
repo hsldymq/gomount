@@ -110,66 +110,9 @@ func TestDriverRegistry_Detect_UnknownType(t *testing.T) {
 	}
 }
 
-func TestDriverRegistry_Detect_AutoDetect_SMB(t *testing.T) {
+func TestDriverRegistry_Detect_EmptyType(t *testing.T) {
 	registry := NewRegistry()
 	registry.Register(&MockDriver{mockType: "smb"})
-
-	// SMB: 有SMB配置
-	entry := &config.MountEntry{
-		Name: "test",
-		SMB:  &config.SMBConfig{Addr: "192.168.1.1"},
-	}
-
-	driver, err := registry.Detect(entry)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if driver.Type() != "smb" {
-		t.Errorf("expected smb driver, got %s", driver.Type())
-	}
-}
-
-func TestDriverRegistry_Detect_AutoDetect_SSHFS(t *testing.T) {
-	registry := NewRegistry()
-	registry.Register(&MockDriver{mockType: "sshfs"})
-
-	entry := &config.MountEntry{
-		Name:  "test",
-		SSHFS: &config.SSHFSConfig{Host: "example.com", RemotePath: "/home/user"},
-	}
-
-	driver, err := registry.Detect(entry)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if driver.Type() != "sshfs" {
-		t.Errorf("expected sshfs driver, got %s", driver.Type())
-	}
-}
-
-func TestDriverRegistry_Detect_AutoDetect_WebDAV(t *testing.T) {
-	registry := NewRegistry()
-	registry.Register(&MockDriver{mockType: "webdav"})
-
-	entry := &config.MountEntry{
-		Name:   "test",
-		WebDAV: &config.WebDAVConfig{URL: "https://example.com/dav"},
-	}
-
-	driver, err := registry.Detect(entry)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if driver.Type() != "webdav" {
-		t.Errorf("expected webdav driver, got %s", driver.Type())
-	}
-}
-
-func TestDriverRegistry_Detect_CannotDetermine(t *testing.T) {
-	registry := NewRegistry()
 
 	entry := &config.MountEntry{
 		Name: "test",
@@ -177,7 +120,7 @@ func TestDriverRegistry_Detect_CannotDetermine(t *testing.T) {
 
 	_, err := registry.Detect(entry)
 	if err == nil {
-		t.Error("expected error when cannot determine driver, got nil")
+		t.Error("expected error when type is empty, got nil")
 	}
 }
 

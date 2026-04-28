@@ -37,14 +37,6 @@ mounts:
       addr: 192.168.1.50
       share_name: downloads
       username: downloader
-workspaces:
-  - name: all-home
-    description: "所有家庭存储"
-    mounts:
-      - nas-main
-      - nas-photos
-      - nas-videos
-      - nas-downloads
 ```
 ## 方案 B：通过 SSHFS + ProxyJump（无 VPN）
 如果你没有 VPN，但家里路由器支持 SSH：
@@ -64,12 +56,6 @@ mounts:
       host: home.ddns.com
       remote_path: /mnt/sda1
     mount_dir_path: /mnt/router-storage
-workspaces:
-  - name: home-remote
-    description: "远程访问家里存储"
-    mounts:
-      - nas-tunnel
-      - router-storage
 ```
 ## 照片备份工作流
 ```bash
