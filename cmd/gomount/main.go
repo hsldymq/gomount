@@ -107,17 +107,17 @@ func createDriverManager(cfg *config.Config) *drivers.Manager {
 
 // prepareMountEntry 准备挂载条目，如果需要则提示输入密码
 func prepareMountEntry(entry *config.MountEntry) error {
-	if !entry.HasPassword() {
+	if entry.SMB != nil && !entry.HasPassword() {
 		fmt.Printf("Mounting: %s\n", entry.Name)
-		fmt.Printf("SMB Address: %s:%d\n", entry.GetEffectiveSMBAddr(), entry.GetEffectiveSMBPort())
-		fmt.Printf("Username: %s\n", entry.GetEffectiveSMBUsername())
+		fmt.Printf("SMB Address: %s:%d\n", entry.SMB.Addr, entry.SMB.GetPort())
+		fmt.Printf("Username: %s\n", entry.SMB.Username)
 		fmt.Println()
 
 		password, err := interaction.PromptPassword("Enter password: ", true)
 		if err != nil {
 			return fmt.Errorf("failed to read password: %w", err)
 		}
-		entry.Password = password
+		entry.SMB.Password = password
 	}
 
 	return nil
@@ -128,7 +128,7 @@ func getDriverType(entry *config.MountEntry) string {
 	if entry.Type != "" {
 		return entry.Type
 	}
-	if entry.SSH != nil && entry.RemotePath != "" {
+	if entry.SSHFS != nil && entry.SSHFS.Host != "" {
 		return "sshfs"
 	}
 	if entry.WebDAV != nil && entry.WebDAV.URL != "" {
@@ -209,7 +209,7 @@ func runMount(cmd *cobra.Command, args []string) error {
 			continue
 		}
 
-		fmt.Printf("  From: //%s:%d/%s\n", entry.GetEffectiveSMBAddr(), entry.GetEffectiveSMBPort(), entry.GetEffectiveShareName())
+		fmt.Printf("  From: //%s:%d/%s\n", entry.SMB.Addr, entry.SMB.GetPort(), entry.SMB.ShareName)
 		fmt.Printf("  To: %s\n", entry.MountDirPath)
 
 		driverType := getDriverType(entry)

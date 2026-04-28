@@ -202,7 +202,7 @@ func (m SelectorModel) renderItem(index int, entry config.MountEntry) string {
 
 	// SMB 地址
 	parts = append(parts, fmt.Sprintf("(%s:%d/%s)",
-		entry.GetEffectiveSMBAddr(), entry.GetEffectiveSMBPort(), entry.GetEffectiveShareName()))
+		entry.SMB.Addr, entry.SMB.GetPort(), entry.SMB.ShareName))
 
 	// 状态（如果启用）
 	if m.ShowStatus {

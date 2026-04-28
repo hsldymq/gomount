@@ -11,10 +11,12 @@ base_dir: /mnt/remote
 
 mounts:
   - name: nas
-    smb_addr: 192.168.1.100
-    share_name: shared
-    username: user
-    password: pass
+    type: smb
+    smb:
+      addr: 192.168.1.100
+      share_name: shared
+      username: user
+      password: pass
 ```
 
 使用:
@@ -27,17 +29,16 @@ gomount mount nas
 文件: `02-sshfs-basic.yaml`
 
 ```yaml
-base_dir: /mnt/remote
-
 mounts:
   - name: dev-server
     type: sshfs
-    ssh:
+    sshfs:
       host: dev.example.com
-      user: developer
-      key_file: ~/.ssh/id_rsa
-    remote_path: /home/developer/projects
+      remote_path: /home/developer/projects
+    mount_dir_path: /mnt/dev-projects
 ```
+
+SSH 连接细节（用户名、端口、密钥、跳板机等）在 `~/.ssh/config` 中配置。
 
 使用:
 ```bash
@@ -53,10 +54,12 @@ base_dir: /mnt/remote
 
 mounts:
   - name: secure-nas
-    smb_addr: 192.168.1.100
-    share_name: secure
-    username: user
-    # password 留空，会交互式提示输入
+    type: smb
+    smb:
+      addr: 192.168.1.100
+      share_name: secure
+      username: user
+      # password 留空，会交互式提示输入
 ```
 
 使用:

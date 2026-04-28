@@ -11,28 +11,32 @@ mounts:
   # 主 NAS
   - name: nas-main
     type: smb
-    smb_addr: 192.168.1.100
-    share_name: data
-    username: admin
-    # password 留空
+    smb:
+      addr: 192.168.1.100
+      share_name: data
+      username: admin
+      # password 留空
   # 照片库
   - name: nas-photos
     type: smb
-    smb_addr: 192.168.1.100
-    share_name: photos
-    username: admin
+    smb:
+      addr: 192.168.1.100
+      share_name: photos
+      username: admin
   # 视频库
   - name: nas-videos
     type: smb
-    smb_addr: 192.168.1.100
-    share_name: videos
-    username: admin
+    smb:
+      addr: 192.168.1.100
+      share_name: videos
+      username: admin
   # 下载机
   - name: nas-downloads
     type: smb
-    smb_addr: 192.168.1.50
-    share_name: downloads
-    username: downloader
+    smb:
+      addr: 192.168.1.50
+      share_name: downloads
+      username: downloader
 workspaces:
   - name: all-home
     description: "所有家庭存储"
@@ -42,30 +46,24 @@ workspaces:
       - nas-videos
       - nas-downloads
 ```
-## 方案 B：通过 SSH 隧道（无 VPN）
+## 方案 B：通过 SSHFS + ProxyJump（无 VPN）
 如果你没有 VPN，但家里路由器支持 SSH：
 ```yaml
 mounts:
-  # 通过 SSH 隧道访问 NAS
+  # 通过跳板机访问 NAS（在 ~/.ssh/config 中配置 ProxyJump）
   - name: nas-tunnel
-    type: tunnel-smb
-    ssh:
-      host: home.ddns.com         # 家里路由器的 DDNS 地址
-      port: 22
-      user: admin
-      key_file: ~/.ssh/home_router
-    smb:
-      addr: 192.168.1.100        # NAS 内网 IP
-      share_name: data
-      username: nasuser
+    type: sshfs
+    sshfs:
+      host: home-nas              # ~/.ssh/config 别名（含 ProxyJump）
+      remote_path: /data
+    mount_dir_path: /mnt/nas-tunnel
   # 直接 SSHFS 到路由器（如果路由器有 USB 存储）
   - name: router-storage
     type: sshfs
-    ssh:
+    sshfs:
       host: home.ddns.com
-      user: admin
-      key_file: ~/.ssh/home_router
-    remote_path: /mnt/sda1
+      remote_path: /mnt/sda1
+    mount_dir_path: /mnt/router-storage
 workspaces:
   - name: home-remote
     description: "远程访问家里存储"

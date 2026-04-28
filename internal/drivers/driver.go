@@ -10,7 +10,7 @@ import (
 // Driver 驱动接口，所有挂载驱动必须实现
 type Driver interface {
 	// Type 返回驱动类型标识
-	// 例如: "smb", "sshfs", "tunnel-smb", "webdav"
+	// 例如: "smb", "sshfs", "webdav"
 	Type() string
 
 	// Mount 执行挂载操作
@@ -81,8 +81,8 @@ func (r *DriverRegistry) Detect(entry *config.MountEntry) (Driver, error) {
 
 	// 2. 向后兼容：根据字段自动推断
 
-	// SSHFS: 有SSH配置且有远程路径
-	if entry.SSH != nil && entry.RemotePath != "" {
+	// SSHFS: 有SSHFS配置
+	if entry.SSHFS != nil && entry.SSHFS.Host != "" {
 		if d, ok := r.drivers["sshfs"]; ok {
 			return d, nil
 		}
@@ -95,8 +95,8 @@ func (r *DriverRegistry) Detect(entry *config.MountEntry) (Driver, error) {
 		}
 	}
 
-	// SMB: 有SMB地址（向后兼容旧配置）
-	if entry.SMBAddr != "" {
+	// SMB: 有SMB配置
+	if entry.SMB != nil && entry.SMB.Addr != "" {
 		if d, ok := r.drivers["smb"]; ok {
 			return d, nil
 		}

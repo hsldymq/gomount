@@ -70,18 +70,22 @@ base_dir: /mnt/smb_share
 
 mounts:
   - name: nas1
-    smb_addr: 10.0.1.2
-    smb_port: 445
-    share_name: shared_folder
-    username: user1
-    password: pass1          # 可选，如省略将提示输入
+    type: smb
+    smb:
+      addr: 10.0.1.2
+      port: 445
+      share_name: shared_folder
+      username: user1
+      password: pass1          # 可选，如省略将提示输入
     mount_dir_name: nas1_mount
 
   - name: media_server
-    smb_addr: 10.0.1.3
-    share_name: media
-    username: user2
-    # 密码未存储 - 挂载时会提示
+    type: smb
+    smb:
+      addr: 10.0.1.3
+      share_name: media
+      username: user2
+      # 密码未存储 - 挂载时会提示
     mount_dir_path: /mnt/media
 ```
 
@@ -90,11 +94,12 @@ mounts:
 | 字段 | 必需 | 默认值 | 描述 |
 |-----|------|--------|------|
 | `name` | 是 | - | 此挂载的唯一标识符 |
-| `smb_addr` | 是 | - | SMB 服务器地址 |
-| `smb_port` | 否 | 445 | SMB 服务器端口 |
-| `share_name` | 是 | - | 服务器上的共享名称 |
-| `username` | 是 | - | 登录用户名 |
-| `password` | 否 | - | 登录密码（为空时提示输入） |
+| `type` | 否 | auto | 挂载类型（smb, sshfs, webdav） |
+| `smb.addr` | 是 | - | SMB 服务器地址 |
+| `smb.port` | 否 | 445 | SMB 服务器端口 |
+| `smb.share_name` | 是 | - | 服务器上的共享名称 |
+| `smb.username` | 是 | - | 登录用户名 |
+| `smb.password` | 否 | - | 登录密码（为空时提示输入） |
 | `mount_dir_name` | 否 | `<name>` | base_dir 内的目录名 |
 | `mount_dir_path` | 否 | - | 完整的自定义挂载路径（覆盖 base_dir 和 mount_dir_name） |
 

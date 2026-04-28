@@ -11,9 +11,10 @@ mounts:
   # 本地主存储
   - name: local-nas
     type: smb
-    smb_addr: 192.168.1.100
-    share_name: data
-    username: admin
+    smb:
+      addr: 192.168.1.100
+      share_name: data
+      username: admin
     mount_dir_path: /mnt/data  # 直接挂载到 /mnt/data
   # Nextcloud（私有云）
   - name: cloud-nextcloud

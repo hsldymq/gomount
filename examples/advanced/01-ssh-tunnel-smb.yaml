@@ -1,16 +1,21 @@
-# SSH 隧道 + SMB 配置
+# SSHFS 通过跳板机配置
+# 需要在 ~/.ssh/config 中预先配置 ProxyJump：
+#
+# Host bastion
+#     HostName bastion.example.com
+#     User admin
+#     IdentityFile ~/.ssh/home_router
+#
+# Host home-nas
+#     HostName 192.168.1.100
+#     User nasuser
+#     ProxyJump bastion
+#     IdentityFile ~/.ssh/nas_key
+#
 mounts:
   - name: home-nas-via-ssh
-    type: tunnel-smb
+    type: sshfs
     ssh:
-      host: your-home-router.com
-      port: 22
-      user: admin
-      key_file: ~/.ssh/home_router
-    smb:
-      addr: 192.168.1.100
-      port: 445
-      share_name: shared
-      username: nasuser
-      password: naspass
+      host: home-nas                # ~/.ssh/config 别名
+    remote_path: /data/shared
     mount_dir_path: /mnt/home-nas

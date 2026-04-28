@@ -81,12 +81,13 @@ workspaces:
 mounts:
   - name: nas
     type: smb
-    smb_addr: 192.168.1.100      # SMB服务器IP
-    smb_port: 445                 # 端口（可选，默认445）
-    share_name: shared_folder     # 共享名称
-    username: user
-    password: pass                # 可选，会交互式提示
-    mount_dir_name: nas_mount     # 挂载目录名（可选，默认使用name）
+    smb:
+      addr: 192.168.1.100      # SMB服务器IP
+      port: 445                 # 端口（可选，默认445）
+      share_name: shared_folder # 共享名称
+      username: user
+      password: pass            # 可选，会交互式提示
+    mount_dir_name: nas_mount   # 挂载目录名（可选，默认使用name）
 ```
 
 #### SSHFS
@@ -95,33 +96,15 @@ mounts:
 mounts:
   - name: dev-server
     type: sshfs
-    ssh:
-      host: dev.example.com       # SSH服务器
-      port: 22                    # SSH端口（可选，默认22）
-      user: developer             # 用户名
-      key_file: ~/.ssh/id_rsa     # 密钥文件（推荐）
-      # password: pass            # 密码（不推荐）
-    remote_path: /home/dev/projects  # 远程路径
+    sshfs:
+      host: dev.example.com       # ~/.ssh/config 中的别名或直接 hostname
+      remote_path: /home/dev/projects
+    mount_dir_path: /mnt/dev
     options:
       cache_timeout: 600          # 缓存超时（秒）
 ```
 
-#### SSH隧道 + SMB
-
-```yaml
-mounts:
-  - name: home-nas-via-ssh
-    type: tunnel-smb
-    ssh:
-      host: home-gateway.com      # SSH跳板机（公网IP）
-      user: admin
-      key_file: ~/.ssh/home
-    smb:
-      addr: 192.168.1.100        # 内网SMB服务器IP
-      share_name: shared
-      username: smbuser
-      password: smbpass
-```
+> SSH 连接细节（用户名、端口、密钥、ProxyJump 等）均由 `~/.ssh/config` 管理。
 
 #### WebDAV
 
@@ -162,21 +145,16 @@ gomount unworkspace company-dev
 
 ### 场景2：远程访问家里NAS
 
-不需要VPN，通过SSH隧道直接访问：
+通过 SSHFS + ProxyJump 访问（在 `~/.ssh/config` 中配置跳板机）：
 
 ```yaml
 mounts:
   - name: home-nas
-    type: tunnel-smb
-    ssh:
-      host: your-home-router.com
-      user: admin
-      key_file: ~/.ssh/home_router
-    smb:
-      addr: 192.168.1.100
-      share_name: photos
-      username: nasuser
-      password: naspass
+    type: sshfs
+    sshfs:
+      host: home-nas             # ~/.ssh/config 别名（含 ProxyJump）
+      remote_path: /data/photos
+    mount_dir_path: /mnt/home-nas
 ```
 
 ### 场景3：多云存储管理
@@ -210,19 +188,17 @@ workspaces:
 
 **A:** 推荐方案：
 1. 配置文件中不写密码，留空
-2. 使用 SSH 密钥认证（SSHFS/SSH隧道）
+2. 使用 SSH 密钥认证（SSHFS）
 3. 设置配置文件权限：`chmod 600 ~/.config/gomount_config.yaml`
 
 ### Q: SSHFS连接断开怎么办？
 
-**A:** 已内置SSH保活机制，默认每30秒发送心跳包。如需调整：
+**A:** 在 `~/.ssh/config` 中配置保活：
 
-```yaml
-ssh:
-  host: example.com
-  user: me
-  keepalive_interval: 30    # 心跳间隔（秒）
-  keepalive_count_max: 3    # 最大失败次数
+```
+Host my-server
+    ServerAliveInterval 30
+    ServerAliveCountMax 3
 ```
 
 ### Q: 如何挂载时不需要sudo？

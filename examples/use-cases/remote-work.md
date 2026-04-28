@@ -10,24 +10,24 @@ mounts:
   # 公司文件服务器
   - name: corp-files
     type: smb
-    smb_addr: fs.company.local
-    share_name: shared
-    username: $USER
-    # password 留空，挂载时输入
+    smb:
+      addr: fs.company.local
+      share_name: shared
+      username: $USER
+      # password 留空，挂载时输入
   # 部门专用存储
   - name: dept-storage
     type: smb
-    smb_addr: 10.0.10.50
-    share_name: engineering
-    username: $USER
+    smb:
+      addr: 10.0.10.50
+      share_name: engineering
+      username: $USER
   # 开发服务器
   - name: dev-box
     type: sshfs
-    ssh:
+    sshfs:
       host: dev.company.com
-      user: $USER
-      key_file: ~/.ssh/company_id_rsa
-    remote_path: /home/$USER/workspace
+      remote_path: /home/$USER/workspace
     options:
       cache_timeout: 600
   # 文档系统（Confluence/SharePoint via WebDAV）
@@ -60,18 +60,14 @@ gomount list
 # 下班
 gomount unworkspace work-mode
 ```
-## SSH 隧道版本（适用于无 VPN）
-如果公司没有 VPN，但有跳板机：
+## 通过跳板机访问（适用于无 VPN）
+如果公司没有 VPN，但有跳板机，在 `~/.ssh/config` 中配置 ProxyJump 即可：
 ```yaml
 mounts:
   - name: corp-files-via-tunnel
-    type: tunnel-smb
-    ssh:
-      host: jump.company.com      # 跳板机
-      user: $USER
-      key_file: ~/.ssh/jump_key
-    smb:
-      addr: fs.company.local      # 内网文件服务器
-      share_name: shared
-      username: $USER
+    type: sshfs
+    sshfs:
+      host: corp-files             # ~/.ssh/config 别名（含 ProxyJump jump.company.com）
+      remote_path: /data/shared
+    mount_dir_path: /mnt/corp-files
 ```

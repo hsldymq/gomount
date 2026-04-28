@@ -1,18 +1,18 @@
 # 工作区配置示例
 mounts:
   - name: company-nas
-    smb_addr: 10.0.1.10
-    share_name: shared
-    username: employee
-    password: company123
+    type: smb
+    smb:
+      addr: 10.0.1.10
+      share_name: shared
+      username: employee
+      password: company123
     mount_dir_path: /mnt/company-nas
 
   - name: dev-server
     type: sshfs
     ssh:
       host: dev.company.com
-      user: developer
-      key_file: ~/.ssh/company_dev
     remote_path: /home/developer/projects
     mount_dir_path: /mnt/dev-projects
 
@@ -25,10 +25,12 @@ mounts:
     mount_dir_path: /mnt/gitlab
 
   - name: personal-nas
-    smb_addr: 192.168.1.100
-    share_name: personal
-    username: me
-    password: mypass
+    type: smb
+    smb:
+      addr: 192.168.1.100
+      share_name: personal
+      username: me
+      password: mypass
     mount_dir_path: /mnt/personal-nas
 
   - name: cloud-backup

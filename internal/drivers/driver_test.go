@@ -114,10 +114,10 @@ func TestDriverRegistry_Detect_AutoDetect_SMB(t *testing.T) {
 	registry := NewRegistry()
 	registry.Register(&MockDriver{mockType: "smb"})
 
-	// 向后兼容：只有SMBAddr
+	// SMB: 有SMB配置
 	entry := &config.MountEntry{
-		Name:    "test",
-		SMBAddr: "192.168.1.1",
+		Name: "test",
+		SMB:  &config.SMBConfig{Addr: "192.168.1.1"},
 	}
 
 	driver, err := registry.Detect(entry)
@@ -135,9 +135,8 @@ func TestDriverRegistry_Detect_AutoDetect_SSHFS(t *testing.T) {
 	registry.Register(&MockDriver{mockType: "sshfs"})
 
 	entry := &config.MountEntry{
-		Name:       "test",
-		SSH:        &config.SSHConfig{Host: "example.com", User: "user"},
-		RemotePath: "/home/user",
+		Name:  "test",
+		SSHFS: &config.SSHFSConfig{Host: "example.com", RemotePath: "/home/user"},
 	}
 
 	driver, err := registry.Detect(entry)

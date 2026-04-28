@@ -11,22 +11,17 @@ import (
 	"github.com/hsldymq/gomount/internal/mount"
 )
 
-// Driver SMB驱动实现
 type Driver struct{}
 
-// NewDriver 创建新的SMB驱动
 func NewDriver() *Driver {
 	return &Driver{}
 }
 
-// Type 返回驱动类型
 func (d *Driver) Type() string {
 	return "smb"
 }
 
-// Mount 执行SMB挂载
 func (d *Driver) Mount(ctx context.Context, entry *config.MountEntry) error {
-	// 检查是否已挂载
 	mounted, err := mount.CheckStatus(entry.MountDirPath)
 	if err != nil {
 		return &drivers.DriverError{
@@ -45,7 +40,6 @@ func (d *Driver) Mount(ctx context.Context, entry *config.MountEntry) error {
 		}
 	}
 
-	// 创建挂载目录
 	if err := os.MkdirAll(entry.MountDirPath, 0755); err != nil {
 		return &drivers.DriverError{
 			Driver: d.Type(),
@@ -55,7 +49,6 @@ func (d *Driver) Mount(ctx context.Context, entry *config.MountEntry) error {
 		}
 	}
 
-	// 创建凭据文件
 	credsFile, err := d.createCredentialFile(entry)
 	if err != nil {
 		return &drivers.DriverError{
@@ -67,7 +60,6 @@ func (d *Driver) Mount(ctx context.Context, entry *config.MountEntry) error {
 	}
 	defer os.Remove(credsFile)
 
-	// 构建并执行挂载命令
 	cmd := d.buildMountCommand(entry, credsFile)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
@@ -82,7 +74,6 @@ func (d *Driver) Mount(ctx context.Context, entry *config.MountEntry) error {
 	return nil
 }
 
-// Unmount 执行卸载
 func (d *Driver) Unmount(ctx context.Context, entry *config.MountEntry) error {
 	cmd := exec.CommandContext(ctx, "umount", entry.MountDirPath)
 	output, err := cmd.CombinedOutput()
@@ -97,7 +88,6 @@ func (d *Driver) Unmount(ctx context.Context, entry *config.MountEntry) error {
 	return nil
 }
 
-// Status 检查挂载状态
 func (d *Driver) Status(ctx context.Context, entry *config.MountEntry) (*drivers.MountStatus, error) {
 	mounted, err := mount.CheckStatus(entry.MountDirPath)
 	if err != nil {
@@ -113,13 +103,13 @@ func (d *Driver) Status(ctx context.Context, entry *config.MountEntry) (*drivers
 		Mounted: mounted,
 		Details: map[string]string{
 			"type": "smb",
-			"addr": entry.SMBAddr,
+			"addr": entry.SMB.Addr,
 		},
 	}
 
 	if mounted {
 		status.Message = fmt.Sprintf("Mounted at %s", entry.MountDirPath)
-		status.Details["share"] = entry.ShareName
+		status.Details["share"] = entry.SMB.ShareName
 	} else {
 		status.Message = "Not mounted"
 	}
@@ -127,40 +117,38 @@ func (d *Driver) Status(ctx context.Context, entry *config.MountEntry) (*drivers
 	return status, nil
 }
 
-// Validate 验证配置
 func (d *Driver) Validate(entry *config.MountEntry) error {
-	if entry.SMBAddr == "" {
-		return fmt.Errorf("smb_addr is required for SMB driver")
+	if entry.SMB == nil {
+		return fmt.Errorf("smb config is required for SMB driver")
 	}
-	if entry.ShareName == "" {
-		return fmt.Errorf("share_name is required for SMB driver")
+	if entry.SMB.Addr == "" {
+		return fmt.Errorf("smb.addr is required for SMB driver")
 	}
-	if entry.Username == "" {
-		return fmt.Errorf("username is required for SMB driver")
+	if entry.SMB.ShareName == "" {
+		return fmt.Errorf("smb.share_name is required for SMB driver")
+	}
+	if entry.SMB.Username == "" {
+		return fmt.Errorf("smb.username is required for SMB driver")
 	}
 	return nil
 }
 
-// createCredentialFile 创建临时凭据文件
 func (d *Driver) createCredentialFile(entry *config.MountEntry) (string, error) {
-	// 创建临时文件
 	tmpFile, err := os.CreateTemp("", "gomount_creds_*.txt")
 	if err != nil {
 		return "", fmt.Errorf("failed to create credentials file: %w", err)
 	}
 	defer tmpFile.Close()
 
-	// 设置权限为仅所有者可读写
 	if err := tmpFile.Chmod(0600); err != nil {
 		os.Remove(tmpFile.Name())
 		return "", fmt.Errorf("failed to set credentials file permissions: %w", err)
 	}
 
-	// 写入凭据
 	content := fmt.Sprintf("username=%s\npassword=%s\ndomain=%s\n",
-		entry.Username,
-		entry.Password,
-		"", // domain支持可后续添加
+		entry.SMB.Username,
+		entry.SMB.Password,
+		"",
 	)
 
 	if _, err := tmpFile.WriteString(content); err != nil {
@@ -171,19 +159,15 @@ func (d *Driver) createCredentialFile(entry *config.MountEntry) (string, error) 
 	return tmpFile.Name(), nil
 }
 
-// buildMountCommand 构建mount.cifs命令
 func (d *Driver) buildMountCommand(entry *config.MountEntry, credsFile string) *exec.Cmd {
-	// 构建SMB地址
-	smbAddr := fmt.Sprintf("//%s:%d/%s", entry.SMBAddr, entry.GetSMBPort(), entry.ShareName)
+	smbAddr := fmt.Sprintf("//%s:%d/%s", entry.SMB.Addr, entry.SMB.GetPort(), entry.SMB.ShareName)
 
-	// 构建挂载选项
 	options := fmt.Sprintf("credentials=%s,file_mode=0755,dir_mode=0755,uid=%d,gid=%d",
 		credsFile,
 		os.Getuid(),
 		os.Getgid(),
 	)
 
-	// 构建命令
 	args := []string{
 		smbAddr,
 		entry.MountDirPath,

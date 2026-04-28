@@ -26,37 +26,39 @@ func TestDriver_Validate(t *testing.T) {
 		{
 			name: "valid entry",
 			entry: &config.MountEntry{
-				Name:      "test",
-				SMBAddr:   "192.168.1.100",
-				ShareName: "shared",
-				Username:  "user",
+				Name: "test",
+				SMB:  &config.SMBConfig{Addr: "192.168.1.100", ShareName: "shared", Username: "user"},
 			},
 			wantErr: false,
 		},
 		{
-			name: "missing smb_addr",
+			name: "missing smb config",
 			entry: &config.MountEntry{
-				Name:      "test",
-				ShareName: "shared",
-				Username:  "user",
+				Name: "test",
+			},
+			wantErr: true,
+		},
+		{
+			name: "missing smb addr",
+			entry: &config.MountEntry{
+				Name: "test",
+				SMB:  &config.SMBConfig{ShareName: "shared", Username: "user"},
 			},
 			wantErr: true,
 		},
 		{
 			name: "missing share_name",
 			entry: &config.MountEntry{
-				Name:     "test",
-				SMBAddr:  "192.168.1.100",
-				Username: "user",
+				Name: "test",
+				SMB:  &config.SMBConfig{Addr: "192.168.1.100", Username: "user"},
 			},
 			wantErr: true,
 		},
 		{
 			name: "missing username",
 			entry: &config.MountEntry{
-				Name:      "test",
-				SMBAddr:   "192.168.1.100",
-				ShareName: "shared",
+				Name: "test",
+				SMB:  &config.SMBConfig{Addr: "192.168.1.100", ShareName: "shared"},
 			},
 			wantErr: true,
 		},
@@ -76,11 +78,7 @@ func TestDriver_buildMountCommand(t *testing.T) {
 	d := NewDriver()
 	entry := &config.MountEntry{
 		Name:         "test",
-		SMBAddr:      "192.168.1.100",
-		SMBPort:      445,
-		ShareName:    "shared",
-		Username:     "user",
-		Password:     "pass",
+		SMB:          &config.SMBConfig{Addr: "192.168.1.100", Port: 445, ShareName: "shared", Username: "user", Password: "pass"},
 		MountDirPath: "/mnt/test",
 	}
 
@@ -90,12 +88,10 @@ func TestDriver_buildMountCommand(t *testing.T) {
 		t.Fatal("expected command, got nil")
 	}
 
-	// 验证命令路径以mount.cifs结尾
 	if !strings.HasSuffix(cmd.Path, "mount.cifs") {
 		t.Errorf("expected path to end with 'mount.cifs', got '%s'", cmd.Path)
 	}
 
-	// 验证参数包含必要元素
 	argsStr := strings.Join(cmd.Args, " ")
 	if !strings.Contains(argsStr, "credentials=/tmp/creds.txt") {
 		t.Error("expected credentials in args")
@@ -108,8 +104,7 @@ func TestDriver_buildMountCommand(t *testing.T) {
 func TestDriver_createCredentialFile(t *testing.T) {
 	d := NewDriver()
 	entry := &config.MountEntry{
-		Username: "testuser",
-		Password: "testpass",
+		SMB: &config.SMBConfig{Username: "testuser", Password: "testpass"},
 	}
 
 	path, err := d.createCredentialFile(entry)
@@ -117,18 +112,15 @@ func TestDriver_createCredentialFile(t *testing.T) {
 		t.Fatalf("createCredentialFile() error = %v", err)
 	}
 	defer func() {
-		// 清理测试文件
 		if path != "" {
 			_ = os.Remove(path)
 		}
 	}()
 
-	// 验证文件存在
 	if _, err := os.Stat(path); os.IsNotExist(err) {
 		t.Error("credential file was not created")
 	}
 
-	// 验证文件内容
 	content, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("failed to read credential file: %v", err)

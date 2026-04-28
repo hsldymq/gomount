@@ -11,35 +11,30 @@ mounts:
   # 主开发服务器
   - name: dev-primary
     type: sshfs
-    ssh:
+    sshfs:
       host: dev1.company.com
-      user: developer
-      key_file: ~/.ssh/dev_key
-    remote_path: /home/developer/projects
+      remote_path: /home/developer/projects
     options:
       cache_timeout: 600
   # 测试服务器
   - name: dev-test
     type: sshfs
-    ssh:
+    sshfs:
       host: test.company.com
-      user: developer
-      key_file: ~/.ssh/dev_key
-    remote_path: /var/www/test
+      remote_path: /var/www/test
   # 生产服务器（只读访问日志）
   - name: prod-logs
     type: sshfs
-    ssh:
+    sshfs:
       host: prod.company.com
-      user: logviewer
-      key_file: ~/.ssh/prod_view_key
-    remote_path: /var/log/app
+      remote_path: /var/log/app
   # 构建服务器共享
   - name: build-share
     type: smb
-    smb_addr: build.company.local
-    share_name: artifacts
-    username: builder
+    smb:
+      addr: build.company.local
+      share_name: artifacts
+      username: builder
   # 代码审查服务器
   - name: gerrit
     type: webdav

@@ -3,22 +3,28 @@
 # ===============================
 mounts:
   - name: nas
-    smb_addr: 192.168.1.100
-    share_name: shared
-    username: user
-    password: pass
+    type: smb
+    smb:
+      addr: 192.168.1.100
+      share_name: shared
+      username: user
+      password: pass
     mount_dir_path: /mnt/nas
 
   - name: nas-backup
-    smb_addr: 192.168.1.100
-    share_name: backup
-    username: user
-    password: pass
+    type: smb
+    smb:
+      addr: 192.168.1.100
+      share_name: backup
+      username: user
+      password: pass
     mount_dir_path: /mnt/backups
 
   - name: nas-media
-    smb_addr: 192.168.1.100
-    share_name: media
-    username: user
-    password: pass
+    type: smb
+    smb:
+      addr: 192.168.1.100
+      share_name: media
+      username: user
+      password: pass
     mount_dir_path: ~/Mounts/media

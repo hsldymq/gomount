@@ -70,18 +70,22 @@ base_dir: /mnt/smb_share
 
 mounts:
   - name: nas1
-    smb_addr: 10.0.1.2
-    smb_port: 445
-    share_name: shared_folder
-    username: user1
-    password: pass1          # Optional, will prompt if omitted
+    type: smb
+    smb:
+      addr: 10.0.1.2
+      port: 445
+      share_name: shared_folder
+      username: user1
+      password: pass1          # Optional, will prompt if omitted
     mount_dir_name: nas1_mount
 
   - name: media_server
-    smb_addr: 10.0.1.3
-    share_name: media
-    username: user2
-    # password not stored - will prompt on mount
+    type: smb
+    smb:
+      addr: 10.0.1.3
+      share_name: media
+      username: user2
+      # password not stored - will prompt on mount
     mount_dir_path: /mnt/media
 ```
 
@@ -90,11 +94,12 @@ mounts:
 | Field | Required | Default | Description |
 |-------|----------|---------|-------------|
 | `name` | Yes | - | Unique identifier for this mount |
-| `smb_addr` | Yes | - | SMB server address |
-| `smb_port` | No | 445 | SMB server port |
-| `share_name` | Yes | - | Share name on the server |
-| `username` | Yes | - | Login username |
-| `password` | No | - | Login password (prompts if empty) |
+| `type` | No | auto | Mount type (smb, sshfs, webdav) |
+| `smb.addr` | Yes | - | SMB server address |
+| `smb.port` | No | 445 | SMB server port |
+| `smb.share_name` | Yes | - | Share name on the server |
+| `smb.username` | Yes | - | Login username |
+| `smb.password` | No | - | Login password (prompts if empty) |
 | `mount_dir_name` | No | `<name>` | Directory name within base_dir |
 | `mount_dir_path` | No | - | Full custom mount path (overrides base_dir and mount_dir_name) |
 

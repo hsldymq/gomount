@@ -8,9 +8,7 @@ import (
 	"github.com/hsldymq/gomount/internal/config"
 )
 
-// Mount 对单个挂载条目执行挂载操作
 func Mount(entry *config.MountEntry) error {
-	// Check if already mounted
 	mounted, err := CheckEntryStatus(entry)
 	if err != nil {
 		return fmt.Errorf("failed to check mount status: %w", err)
@@ -19,22 +17,18 @@ func Mount(entry *config.MountEntry) error {
 		return fmt.Errorf("already mounted at %s", entry.MountDirPath)
 	}
 
-	// Create mount directory if it doesn't exist
 	if err := os.MkdirAll(entry.MountDirPath, 0755); err != nil {
 		return &MountError{Op: "mount", Path: entry.MountDirPath, Err: fmt.Errorf("failed to create mount directory: %w", err)}
 	}
 
-	// Create credentials file
 	credsFile, err := createCredentialFile(entry)
 	if err != nil {
 		return &MountError{Op: "mount", Path: entry.MountDirPath, Err: err}
 	}
 	defer os.Remove(credsFile)
 
-	// Build mount command
 	cmd := buildMountCommand(entry, credsFile)
 
-	// Execute mount command
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return &MountError{Op: "mount", Path: entry.MountDirPath, Err: fmt.Errorf("%s", string(output))}
@@ -43,31 +37,26 @@ func Mount(entry *config.MountEntry) error {
 	return nil
 }
 
-// CreateCredentialFile 为外部使用创建临时凭据文件
 func CreateCredentialFile(entry *config.MountEntry) (string, error) {
 	return createCredentialFile(entry)
 }
 
-// createCredentialFile 为 mount.cifs 创建临时凭据文件
 func createCredentialFile(entry *config.MountEntry) (string, error) {
-	// Create a temp file with restricted permissions
 	tmpFile, err := os.CreateTemp("", "gomount_creds_*.txt")
 	if err != nil {
 		return "", fmt.Errorf("failed to create credentials file: %w", err)
 	}
 	defer tmpFile.Close()
 
-	// Set file permissions to owner-read only (0600)
 	if err := tmpFile.Chmod(0600); err != nil {
 		os.Remove(tmpFile.Name())
 		return "", fmt.Errorf("failed to set credentials file permissions: %w", err)
 	}
 
-	// Write credentials
 	content := fmt.Sprintf("username=%s\npassword=%s\ndomain=%s\n",
-		entry.GetEffectiveSMBUsername(),
-		entry.GetEffectiveSMBPassword(),
-		"", // Could add domain field later
+		entry.SMB.Username,
+		entry.SMB.Password,
+		"",
 	)
 
 	if _, err := tmpFile.WriteString(content); err != nil {
@@ -78,26 +67,20 @@ func createCredentialFile(entry *config.MountEntry) (string, error) {
 	return tmpFile.Name(), nil
 }
 
-// BuildMountCommand 为外部使用构建 mount.cifs 命令
 func BuildMountCommand(entry *config.MountEntry, credsFile string) *exec.Cmd {
 	return buildMountCommand(entry, credsFile)
 }
 
-// buildMountCommand 构建 mount.cifs 命令
 func buildMountCommand(entry *config.MountEntry, credsFile string) *exec.Cmd {
-	// Build SMB address (不包含端口)
-	smbAddr := fmt.Sprintf("//%s/%s", entry.GetEffectiveSMBAddr(), entry.GetEffectiveShareName())
+	smbAddr := fmt.Sprintf("//%s/%s", entry.SMB.Addr, entry.SMB.ShareName)
 
-	// Build mount options
-	// 端口通过 port 选项指定，而不是放在地址中
 	options := fmt.Sprintf("credentials=%s,port=%d,file_mode=0755,dir_mode=0755,uid=%d,gid=%d",
 		credsFile,
-		entry.GetEffectiveSMBPort(),
+		entry.SMB.GetPort(),
 		os.Getuid(),
 		os.Getgid(),
 	)
 
-	// Build command: mount.cifs //server/share /mount/path -o options
 	args := []string{
 		smbAddr,
 		entry.MountDirPath,
@@ -107,12 +90,9 @@ func buildMountCommand(entry *config.MountEntry, credsFile string) *exec.Cmd {
 	return exec.Command("mount.cifs", args...)
 }
 
-// EnsureBaseDir 如果基础目录不存在则创建
 func EnsureBaseDir(baseDir string) error {
-	// Check if base dir exists
 	info, err := os.Stat(baseDir)
 	if os.IsNotExist(err) {
-		// Create the directory
 		if err := os.MkdirAll(baseDir, 0755); err != nil {
 			return fmt.Errorf("failed to create base directory: %w", err)
 		}
@@ -122,7 +102,6 @@ func EnsureBaseDir(baseDir string) error {
 		return fmt.Errorf("failed to access base directory: %w", err)
 	}
 
-	// Check if it's actually a directory
 	if !info.IsDir() {
 		return fmt.Errorf("base_dir exists but is not a directory: %s", baseDir)
 	}
@@ -130,9 +109,8 @@ func EnsureBaseDir(baseDir string) error {
 	return nil
 }
 
-// MountError 挂载或卸载操作期间发生的错误
 type MountError struct {
-	Op   string // 操作类型："mount" 或 "umount"
+	Op   string
 	Path string
 	Err  error
 }
