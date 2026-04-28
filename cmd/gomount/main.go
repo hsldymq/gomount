@@ -11,7 +11,7 @@ import (
 	sshfsDriver "github.com/hsldymq/gomount/internal/drivers/sshfs"
 	webdavDriver "github.com/hsldymq/gomount/internal/drivers/webdav"
 	"github.com/hsldymq/gomount/internal/interaction"
-	"github.com/hsldymq/gomount/internal/mount"
+	"github.com/hsldymq/gomount/internal/status"
 	"github.com/hsldymq/gomount/internal/tui"
 	"github.com/spf13/cobra"
 )
@@ -146,7 +146,7 @@ func runList(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	if err := mount.RefreshAllStatus(cfg); err != nil {
+	if err := status.RefreshAllStatus(cfg); err != nil {
 		fmt.Fprintf(os.Stderr, "Warning: failed to refresh mount status: %v\n", err)
 	}
 
@@ -227,7 +227,7 @@ func runMount(cmd *cobra.Command, args []string) error {
 			// 对于 SMB 驱动，尝试使用 sudo
 			if driverType == "smb" && interaction.NeedsPrivilege() {
 				fmt.Println("  Privilege escalation required...")
-				if err := mountWithSudo(entry); err != nil {
+				if err := mountWithSudo(mgr, entry); err != nil {
 					fmt.Fprintf(os.Stderr, "  Failed: %v\n\n", err)
 					failCount++
 					continue
@@ -308,7 +308,7 @@ func runUmount(cmd *cobra.Command, args []string) error {
 			// 对于 SMB 驱动，尝试使用 sudo
 			if driverType == "smb" && interaction.NeedsPrivilege() {
 				fmt.Println("  Privilege escalation required...")
-				if err := umountWithSudo(entry.MountDirPath); err != nil {
+				if err := umountWithSudo(mgr, entry.MountDirPath); err != nil {
 					fmt.Fprintf(os.Stderr, "  Failed: %v\n\n", err)
 					failCount++
 					continue
@@ -336,32 +336,28 @@ func runUmount(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-// mountWithSudo 尝试使用权限提升进行挂载（仅用于 SMB 驱动）
-func mountWithSudo(entry *config.MountEntry) error {
-	credsFile, err := mount.CreateCredentialFile(entry)
+func mountWithSudo(mgr *drivers.Manager, entry *config.MountEntry) error {
+	d, err := mgr.GetDriver("smb")
 	if err != nil {
 		return err
 	}
-	defer os.Remove(credsFile)
-
-	cmd := mount.BuildMountCommand(entry, credsFile)
-
-	if err := interaction.RunWithSudo(cmd); err != nil {
-		return fmt.Errorf("mount with sudo failed: %w", err)
+	smb, ok := d.(*smbDriver.Driver)
+	if !ok {
+		return fmt.Errorf("unexpected driver type for smb")
 	}
-
-	return nil
+	return smb.MountWithSudo(entry)
 }
 
-// umountWithSudo 尝试使用权限提升进行卸载（仅用于 SMB 驱动）
-func umountWithSudo(mountPath string) error {
-	cmd := mount.BuildUmountCommand(mountPath)
-
-	if err := interaction.RunWithSudo(cmd); err != nil {
-		return fmt.Errorf("unmount with sudo failed: %w", err)
+func umountWithSudo(mgr *drivers.Manager, mountPath string) error {
+	d, err := mgr.GetDriver("smb")
+	if err != nil {
+		return err
 	}
-
-	return nil
+	smb, ok := d.(*smbDriver.Driver)
+	if !ok {
+		return fmt.Errorf("unexpected driver type for smb")
+	}
+	return smb.UnmountWithSudo(mountPath)
 }
 
 const configExample = `# gomount 配置文件示例

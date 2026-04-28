@@ -9,7 +9,7 @@ import (
 
 	"github.com/hsldymq/gomount/internal/config"
 	"github.com/hsldymq/gomount/internal/drivers"
-	"github.com/hsldymq/gomount/internal/mount"
+	"github.com/hsldymq/gomount/internal/status"
 )
 
 type Driver struct{}
@@ -23,7 +23,7 @@ func (d *Driver) Type() string {
 }
 
 func (d *Driver) Mount(ctx context.Context, entry *config.MountEntry) error {
-	mounted, err := mount.CheckStatus(entry.MountDirPath)
+	mounted, err := status.CheckStatus(entry.MountDirPath)
 	if err != nil {
 		return &drivers.DriverError{
 			Driver: d.Type(),
@@ -79,7 +79,7 @@ func (d *Driver) Unmount(ctx context.Context, entry *config.MountEntry) error {
 }
 
 func (d *Driver) Status(ctx context.Context, entry *config.MountEntry) (*drivers.MountStatus, error) {
-	mounted, err := mount.CheckStatus(entry.MountDirPath)
+	mounted, err := status.CheckStatus(entry.MountDirPath)
 	if err != nil {
 		return nil, &drivers.DriverError{
 			Driver: d.Type(),

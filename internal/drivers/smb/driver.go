@@ -8,7 +8,8 @@ import (
 
 	"github.com/hsldymq/gomount/internal/config"
 	"github.com/hsldymq/gomount/internal/drivers"
-	"github.com/hsldymq/gomount/internal/mount"
+	"github.com/hsldymq/gomount/internal/interaction"
+	"github.com/hsldymq/gomount/internal/status"
 )
 
 type Driver struct{}
@@ -22,7 +23,7 @@ func (d *Driver) Type() string {
 }
 
 func (d *Driver) Mount(ctx context.Context, entry *config.MountEntry) error {
-	mounted, err := mount.CheckStatus(entry.MountDirPath)
+	mounted, err := status.CheckStatus(entry.MountDirPath)
 	if err != nil {
 		return &drivers.DriverError{
 			Driver: d.Type(),
@@ -89,7 +90,7 @@ func (d *Driver) Unmount(ctx context.Context, entry *config.MountEntry) error {
 }
 
 func (d *Driver) Status(ctx context.Context, entry *config.MountEntry) (*drivers.MountStatus, error) {
-	mounted, err := mount.CheckStatus(entry.MountDirPath)
+	mounted, err := status.CheckStatus(entry.MountDirPath)
 	if err != nil {
 		return nil, &drivers.DriverError{
 			Driver: d.Type(),
@@ -175,4 +176,26 @@ func (d *Driver) buildMountCommand(entry *config.MountEntry, credsFile string) *
 	}
 
 	return exec.Command("mount.cifs", args...)
+}
+
+func (d *Driver) MountWithSudo(entry *config.MountEntry) error {
+	credsFile, err := d.createCredentialFile(entry)
+	if err != nil {
+		return err
+	}
+	defer os.Remove(credsFile)
+
+	cmd := d.buildMountCommand(entry, credsFile)
+	if err := interaction.RunWithSudo(cmd); err != nil {
+		return fmt.Errorf("mount with sudo failed: %w", err)
+	}
+	return nil
+}
+
+func (d *Driver) UnmountWithSudo(mountPath string) error {
+	cmd := exec.Command("umount", mountPath)
+	if err := interaction.RunWithSudo(cmd); err != nil {
+		return fmt.Errorf("unmount with sudo failed: %w", err)
+	}
+	return nil
 }
