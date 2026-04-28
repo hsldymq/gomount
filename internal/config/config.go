@@ -49,6 +49,13 @@ func Load(path string) (*Config, error) {
 		return nil, &ConfigError{Path: path, Err: fmt.Errorf("config validation failed: %w", err)}
 	}
 
+	// Validate driver config for each mount entry
+	for i := range cfg.Mounts {
+		if err := cfg.Mounts[i].ValidateDriverConfig(); err != nil {
+			return nil, &ConfigError{Path: path, Err: err}
+		}
+	}
+
 	// Normalize mount paths
 	if err := cfg.Normalize(); err != nil {
 		return nil, &ConfigError{Path: path, Err: fmt.Errorf("failed to normalize config: %w", err)}

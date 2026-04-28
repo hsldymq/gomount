@@ -1,5 +1,7 @@
 package config
 
+import "fmt"
+
 // Config 主配置结构
 type Config struct {
 	Mounts     []MountEntry `yaml:"mounts" mapstructure:"mounts" validate:"required,min=1"`
@@ -65,4 +67,29 @@ func (m *MountEntry) HasPassword() bool {
 		return m.SMB.Password != ""
 	}
 	return false
+}
+
+// ValidateDriverConfig 根据 type 字段检查对应的配置块是否存在
+func (m *MountEntry) ValidateDriverConfig() error {
+	switch m.Type {
+	case "smb":
+		if m.SMB == nil {
+			return fmt.Errorf("mount entry '%s': type is 'smb' but 'smb' config is missing", m.Name)
+		}
+	case "sshfs":
+		if m.SSHFS == nil {
+			return fmt.Errorf("mount entry '%s': type is 'sshfs' but 'sshfs' config is missing", m.Name)
+		}
+	case "webdav":
+		if m.WebDAV == nil {
+			return fmt.Errorf("mount entry '%s': type is 'webdav' but 'webdav' config is missing", m.Name)
+		}
+	case "":
+		if m.SMB == nil && m.SSHFS == nil && m.WebDAV == nil {
+			return fmt.Errorf("mount entry '%s': no driver config provided (need one of: smb, sshfs, webdav)", m.Name)
+		}
+	default:
+		return fmt.Errorf("mount entry '%s': unknown type '%s'", m.Name, m.Type)
+	}
+	return nil
 }

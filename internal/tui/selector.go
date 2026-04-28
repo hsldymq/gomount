@@ -200,9 +200,16 @@ func (m SelectorModel) renderItem(index int, entry config.MountEntry) string {
 	// 名称
 	parts = append(parts, fmt.Sprintf("%s", entry.Name))
 
-	// SMB 地址
-	parts = append(parts, fmt.Sprintf("(%s:%d/%s)",
-		entry.SMB.Addr, entry.SMB.GetPort(), entry.SMB.ShareName))
+	var addrInfo string
+	switch {
+	case entry.SMB != nil:
+		addrInfo = fmt.Sprintf("(%s:%d/%s)", entry.SMB.Addr, entry.SMB.GetPort(), entry.SMB.ShareName)
+	case entry.SSHFS != nil:
+		addrInfo = fmt.Sprintf("(%s:%s)", entry.SSHFS.Host, entry.SSHFS.RemotePath)
+	case entry.WebDAV != nil:
+		addrInfo = fmt.Sprintf("(%s)", entry.WebDAV.URL)
+	}
+	parts = append(parts, addrInfo)
 
 	// 状态（如果启用）
 	if m.ShowStatus {

@@ -182,7 +182,15 @@ func (m ListModel) renderRow(index int, entry config.MountEntry) string {
 
 	// Truncate values if too long
 	name := truncate(entry.Name, nameWidth)
-	addr := truncate(fmt.Sprintf("%s:%d", entry.SMB.Addr, entry.SMB.GetPort()), addrWidth)
+	var addr string
+	switch {
+	case entry.SMB != nil:
+		addr = truncate(fmt.Sprintf("%s:%d", entry.SMB.Addr, entry.SMB.GetPort()), addrWidth)
+	case entry.SSHFS != nil:
+		addr = truncate(fmt.Sprintf("%s:%s", entry.SSHFS.Host, entry.SSHFS.RemotePath), addrWidth)
+	case entry.WebDAV != nil:
+		addr = truncate(entry.WebDAV.URL, addrWidth)
+	}
 	path := truncate(entry.MountDirPath, pathWidth)
 
 	// Build row
