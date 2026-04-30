@@ -1,6 +1,7 @@
 package webdav
 
 import (
+	"os"
 	"strings"
 	"testing"
 
@@ -71,9 +72,9 @@ func TestDriver_buildMountCommand(t *testing.T) {
 	tests := []struct {
 		name          string
 		entry         *config.MountEntry
+		confFile      string
 		expectURL     string
 		expectOptions []string
-		expectEnvVars []string
 	}{
 		{
 			name: "basic webdav",
@@ -82,20 +83,20 @@ func TestDriver_buildMountCommand(t *testing.T) {
 				WebDAV:       &config.WebDAVConfig{URL: "https://cloud.example.com/dav"},
 				MountDirPath: "/mnt/webdav",
 			},
+			confFile:      "",
 			expectURL:     "https://cloud.example.com/dav",
 			expectOptions: []string{},
-			expectEnvVars: []string{},
 		},
 		{
-			name: "webdav with auth",
+			name: "webdav with conf",
 			entry: &config.MountEntry{
 				Name:         "test",
 				WebDAV:       &config.WebDAVConfig{URL: "https://cloud.example.com/dav", Username: "user", Password: "secret"},
 				MountDirPath: "/mnt/webdav",
 			},
+			confFile:      "/tmp/test.conf",
 			expectURL:     "https://cloud.example.com/dav",
-			expectOptions: []string{},
-			expectEnvVars: []string{"WEBDAV_USERNAME=user", "WEBDAV_PASSWORD=secret"},
+			expectOptions: []string{"conf=/tmp/test.conf"},
 		},
 		{
 			name: "webdav with custom options",
@@ -108,52 +109,93 @@ func TestDriver_buildMountCommand(t *testing.T) {
 					"dir_mode":  "0755",
 				},
 			},
+			confFile:      "",
 			expectURL:     "https://cloud.example.com/dav",
 			expectOptions: []string{"file_mode=0644", "dir_mode=0755"},
-			expectEnvVars: []string{},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cmd := d.buildMountCommand(tt.entry)
+			cmd := d.buildMountCommand(tt.entry, tt.confFile)
 
 			if cmd == nil {
 				t.Fatal("expected command, got nil")
 			}
 
-			// 验证命令路径
 			if !strings.HasSuffix(cmd.Path, "mount.davfs") {
 				t.Errorf("expected path to end with 'mount.davfs', got '%s'", cmd.Path)
 			}
 
-			// 验证参数
 			argsStr := strings.Join(cmd.Args, " ")
 
-			// 检查URL
 			if !strings.Contains(argsStr, tt.expectURL) {
 				t.Errorf("expected URL '%s' in args, got: %s", tt.expectURL, argsStr)
 			}
 
-			// 检查挂载路径
 			if !strings.Contains(argsStr, tt.entry.MountDirPath) {
 				t.Errorf("expected mount path '%s' in args, got: %s", tt.entry.MountDirPath, argsStr)
 			}
 
-			// 检查选项
 			for _, opt := range tt.expectOptions {
 				if !strings.Contains(argsStr, opt) {
 					t.Errorf("expected option containing '%s' in args, got: %s", opt, argsStr)
 				}
 			}
-
-			// 检查环境变量
-			envStr := strings.Join(cmd.Env, " ")
-			for _, env := range tt.expectEnvVars {
-				if !strings.Contains(envStr, env) {
-					t.Errorf("expected env var '%s' in environment, got: %s", env, envStr)
-				}
-			}
 		})
 	}
+}
+
+func TestDriver_createCredentialFiles(t *testing.T) {
+	d := NewDriver()
+
+	t.Run("no credentials", func(t *testing.T) {
+		entry := &config.MountEntry{
+			WebDAV: &config.WebDAVConfig{URL: "https://example.com/dav"},
+		}
+		confFile, secretsPath, cleanup, err := d.createCredentialFiles(entry)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if confFile != "" {
+			t.Error("expected empty confFile when no credentials")
+		}
+		if secretsPath != "" {
+			t.Error("expected empty secretsPath when no credentials")
+		}
+		if cleanup != nil {
+			t.Error("expected nil cleanup when no credentials")
+		}
+	})
+
+	t.Run("with credentials", func(t *testing.T) {
+		entry := &config.MountEntry{
+			WebDAV: &config.WebDAVConfig{
+				URL:      "https://example.com/dav",
+				Username: "testuser",
+				Password: "testpass",
+			},
+		}
+		confFile, _, cleanup, err := d.createCredentialFiles(entry)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		defer cleanup()
+
+		if confFile == "" {
+			t.Fatal("expected conf file path")
+		}
+
+		if _, err := os.Stat(confFile); os.IsNotExist(err) {
+			t.Error("conf file was not created")
+		}
+
+		confContent, err := os.ReadFile(confFile)
+		if err != nil {
+			t.Fatalf("failed to read conf file: %v", err)
+		}
+		if !strings.Contains(string(confContent), "secrets ") {
+			t.Errorf("conf file should contain secrets path, got: %s", string(confContent))
+		}
+	})
 }

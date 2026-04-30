@@ -9,6 +9,7 @@ import (
 
 	"github.com/hsldymq/gomount/internal/config"
 	"github.com/hsldymq/gomount/internal/drivers"
+	"github.com/hsldymq/gomount/internal/interaction"
 	"github.com/hsldymq/gomount/internal/status"
 )
 
@@ -20,6 +21,10 @@ func NewDriver() *Driver {
 
 func (d *Driver) Type() string {
 	return "sshfs"
+}
+
+func (d *Driver) NeedsSudo() bool {
+	return false
 }
 
 func (d *Driver) Mount(ctx context.Context, entry *config.MountEntry) error {
@@ -51,13 +56,12 @@ func (d *Driver) Mount(ctx context.Context, entry *config.MountEntry) error {
 	}
 
 	cmd := d.buildMountCommand(entry)
-	output, err := cmd.CombinedOutput()
-	if err != nil {
+	if err := interaction.RunCommand(cmd); err != nil {
 		return &drivers.DriverError{
 			Driver: d.Type(),
 			Op:     "mount",
 			Entry:  entry.Name,
-			Err:    fmt.Errorf("sshfs failed: %w\nOutput: %s", err, string(output)),
+			Err:    fmt.Errorf("sshfs failed: %w", err),
 		}
 	}
 
@@ -65,14 +69,13 @@ func (d *Driver) Mount(ctx context.Context, entry *config.MountEntry) error {
 }
 
 func (d *Driver) Unmount(ctx context.Context, entry *config.MountEntry) error {
-	cmd := exec.CommandContext(ctx, "umount", entry.MountDirPath)
-	output, err := cmd.CombinedOutput()
-	if err != nil {
+	cmd := exec.CommandContext(ctx, "fusermount", "-u", entry.MountDirPath)
+	if err := interaction.RunCommand(cmd); err != nil {
 		return &drivers.DriverError{
 			Driver: d.Type(),
 			Op:     "unmount",
 			Entry:  entry.Name,
-			Err:    fmt.Errorf("umount failed: %w\nOutput: %s", err, string(output)),
+			Err:    fmt.Errorf("fusermount failed: %w", err),
 		}
 	}
 	return nil

@@ -46,6 +46,10 @@ func (m *MockDriver) Validate(entry *config.MountEntry) error {
 	return m.validateError
 }
 
+func (m *MockDriver) NeedsSudo() bool {
+	return false
+}
+
 func TestDriverRegistry_RegisterAndGet(t *testing.T) {
 	registry := NewRegistry()
 	mockDriver := &MockDriver{mockType: "mock"}

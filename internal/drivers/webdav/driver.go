@@ -9,25 +9,25 @@ import (
 
 	"github.com/hsldymq/gomount/internal/config"
 	"github.com/hsldymq/gomount/internal/drivers"
+	"github.com/hsldymq/gomount/internal/interaction"
 	"github.com/hsldymq/gomount/internal/status"
 )
 
-// Driver WebDAV驱动实现
 type Driver struct{}
 
-// NewDriver 创建新的WebDAV驱动
 func NewDriver() *Driver {
 	return &Driver{}
 }
 
-// Type 返回驱动类型
 func (d *Driver) Type() string {
 	return "webdav"
 }
 
-// Mount 执行WebDAV挂载
+func (d *Driver) NeedsSudo() bool {
+	return true
+}
+
 func (d *Driver) Mount(ctx context.Context, entry *config.MountEntry) error {
-	// 检查是否已挂载
 	mounted, err := status.CheckStatus(entry.MountDirPath)
 	if err != nil {
 		return &drivers.DriverError{
@@ -46,7 +46,6 @@ func (d *Driver) Mount(ctx context.Context, entry *config.MountEntry) error {
 		}
 	}
 
-	// 创建挂载目录
 	if err := os.MkdirAll(entry.MountDirPath, 0755); err != nil {
 		return &drivers.DriverError{
 			Driver: d.Type(),
@@ -56,37 +55,90 @@ func (d *Driver) Mount(ctx context.Context, entry *config.MountEntry) error {
 		}
 	}
 
-	// 构建并执行挂载命令
-	cmd := d.buildMountCommand(entry)
-	output, err := cmd.CombinedOutput()
+	confFile, secretsPath, cleanup, err := d.createCredentialFiles(entry)
 	if err != nil {
 		return &drivers.DriverError{
 			Driver: d.Type(),
 			Op:     "mount",
 			Entry:  entry.Name,
-			Err:    fmt.Errorf("mount.davfs failed: %w\nOutput: %s", err, string(output)),
+			Err:    err,
+		}
+	}
+	if cleanup != nil {
+		defer cleanup()
+	}
+
+	cmd := d.buildMountCommand(entry, confFile)
+
+	if interaction.NeedsPrivilege() {
+		if secretsPath != "" {
+			if err := chownToRoot(secretsPath); err != nil {
+				return &drivers.DriverError{
+					Driver: d.Type(),
+					Op:     "mount",
+					Entry:  entry.Name,
+					Err:    fmt.Errorf("failed to chown secrets file: %w", err),
+				}
+			}
+			if err := chownToRoot(confFile); err != nil {
+				return &drivers.DriverError{
+					Driver: d.Type(),
+					Op:     "mount",
+					Entry:  entry.Name,
+					Err:    fmt.Errorf("failed to chown conf file: %w", err),
+				}
+			}
+		}
+		cmd, err = interaction.WrapWithSudo(cmd)
+		if err != nil {
+			return &drivers.DriverError{
+				Driver: d.Type(),
+				Op:     "mount",
+				Entry:  entry.Name,
+				Err:    err,
+			}
+		}
+	}
+
+	if err := interaction.RunCommand(cmd); err != nil {
+		return &drivers.DriverError{
+			Driver: d.Type(),
+			Op:     "mount",
+			Entry:  entry.Name,
+			Err:    fmt.Errorf("mount.davfs failed: %w", err),
 		}
 	}
 
 	return nil
 }
 
-// Unmount 执行卸载
 func (d *Driver) Unmount(ctx context.Context, entry *config.MountEntry) error {
 	cmd := exec.CommandContext(ctx, "umount", entry.MountDirPath)
-	output, err := cmd.CombinedOutput()
-	if err != nil {
+
+	var err error
+	if interaction.NeedsPrivilege() {
+		cmd, err = interaction.WrapWithSudo(cmd)
+		if err != nil {
+			return &drivers.DriverError{
+				Driver: d.Type(),
+				Op:     "unmount",
+				Entry:  entry.Name,
+				Err:    err,
+			}
+		}
+	}
+
+	if err := interaction.RunCommand(cmd); err != nil {
 		return &drivers.DriverError{
 			Driver: d.Type(),
 			Op:     "unmount",
 			Entry:  entry.Name,
-			Err:    fmt.Errorf("umount failed: %w\nOutput: %s", err, string(output)),
+			Err:    fmt.Errorf("umount failed: %w", err),
 		}
 	}
 	return nil
 }
 
-// Status 检查挂载状态
 func (d *Driver) Status(ctx context.Context, entry *config.MountEntry) (*drivers.MountStatus, error) {
 	mounted, err := status.CheckStatus(entry.MountDirPath)
 	if err != nil {
@@ -115,7 +167,6 @@ func (d *Driver) Status(ctx context.Context, entry *config.MountEntry) (*drivers
 	return status, nil
 }
 
-// Validate 验证配置
 func (d *Driver) Validate(entry *config.MountEntry) error {
 	if entry.WebDAV == nil {
 		return fmt.Errorf("webdav config is required for webdav driver")
@@ -126,17 +177,78 @@ func (d *Driver) Validate(entry *config.MountEntry) error {
 	return nil
 }
 
-// buildMountCommand 构建mount.davfs命令
-func (d *Driver) buildMountCommand(entry *config.MountEntry) *exec.Cmd {
+func (d *Driver) createCredentialFiles(entry *config.MountEntry) (string, string, func(), error) {
+	if entry.WebDAV.Username == "" && entry.WebDAV.Password == "" {
+		return "", "", nil, nil
+	}
+
+	secretsTmp, err := os.CreateTemp("", "gomount_webdav_secrets_*.txt")
+	if err != nil {
+		return "", "", nil, fmt.Errorf("failed to create secrets file: %w", err)
+	}
+
+	if err := secretsTmp.Chmod(0600); err != nil {
+		os.Remove(secretsTmp.Name())
+		secretsTmp.Close()
+		return "", "", nil, fmt.Errorf("failed to set secrets file permissions: %w", err)
+	}
+
+	content := fmt.Sprintf("%s %s %s\n", entry.WebDAV.URL, entry.WebDAV.Username, entry.WebDAV.Password)
+	if _, err := secretsTmp.WriteString(content); err != nil {
+		os.Remove(secretsTmp.Name())
+		secretsTmp.Close()
+		return "", "", nil, fmt.Errorf("failed to write secrets: %w", err)
+	}
+	secretsPath := secretsTmp.Name()
+	secretsTmp.Close()
+
+	confTmp, err := os.CreateTemp("", "gomount_webdav_conf_*.conf")
+	if err != nil {
+		os.Remove(secretsPath)
+		return "", "", nil, fmt.Errorf("failed to create conf file: %w", err)
+	}
+
+	if err := confTmp.Chmod(0600); err != nil {
+		os.Remove(secretsPath)
+		os.Remove(confTmp.Name())
+		confTmp.Close()
+		return "", "", nil, fmt.Errorf("failed to set conf file permissions: %w", err)
+	}
+
+	if _, err := confTmp.WriteString(fmt.Sprintf("secrets %s\n", secretsPath)); err != nil {
+		os.Remove(secretsPath)
+		os.Remove(confTmp.Name())
+		confTmp.Close()
+		return "", "", nil, fmt.Errorf("failed to write conf: %w", err)
+	}
+	confPath := confTmp.Name()
+	confTmp.Close()
+
+	cleanup := func() {
+		os.Remove(secretsPath)
+		os.Remove(confPath)
+	}
+
+	return confPath, secretsPath, cleanup, nil
+}
+
+func chownToRoot(path string) error {
+	cmd := exec.Command("sudo", "chown", "root:root", path)
+	return cmd.Run()
+}
+
+func (d *Driver) buildMountCommand(entry *config.MountEntry, confFile string) *exec.Cmd {
 	var options []string
 
-	// 文件权限选项
 	options = append(options,
 		fmt.Sprintf("uid=%d", os.Getuid()),
 		fmt.Sprintf("gid=%d", os.Getgid()),
 	)
 
-	// 从entry.Options获取其他选项
+	if confFile != "" {
+		options = append(options, fmt.Sprintf("conf=%s", confFile))
+	}
+
 	if entry.Options != nil {
 		if fileMode, ok := entry.Options["file_mode"]; ok {
 			options = append(options, fmt.Sprintf("file_mode=%v", fileMode))
@@ -146,7 +258,6 @@ func (d *Driver) buildMountCommand(entry *config.MountEntry) *exec.Cmd {
 		}
 	}
 
-	// 构建命令
 	args := []string{
 		entry.WebDAV.URL,
 		entry.MountDirPath,
@@ -156,17 +267,5 @@ func (d *Driver) buildMountCommand(entry *config.MountEntry) *exec.Cmd {
 		args = append(args, "-o", strings.Join(options, ","))
 	}
 
-	cmd := exec.Command("mount.davfs", args...)
-
-	// 设置环境变量（用户名密码）
-	env := os.Environ()
-	if entry.WebDAV.Username != "" {
-		env = append(env, fmt.Sprintf("WEBDAV_USERNAME=%s", entry.WebDAV.Username))
-	}
-	if entry.WebDAV.Password != "" {
-		env = append(env, fmt.Sprintf("WEBDAV_PASSWORD=%s", entry.WebDAV.Password))
-	}
-	cmd.Env = env
-
-	return cmd
+	return exec.Command("mount.davfs", args...)
 }

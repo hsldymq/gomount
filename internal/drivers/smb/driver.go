@@ -22,6 +22,10 @@ func (d *Driver) Type() string {
 	return "smb"
 }
 
+func (d *Driver) NeedsSudo() bool {
+	return true
+}
+
 func (d *Driver) Mount(ctx context.Context, entry *config.MountEntry) error {
 	mounted, err := status.CheckStatus(entry.MountDirPath)
 	if err != nil {
@@ -62,13 +66,25 @@ func (d *Driver) Mount(ctx context.Context, entry *config.MountEntry) error {
 	defer os.Remove(credsFile)
 
 	cmd := d.buildMountCommand(entry, credsFile)
-	output, err := cmd.CombinedOutput()
-	if err != nil {
+
+	if interaction.NeedsPrivilege() {
+		cmd, err = interaction.WrapWithSudo(cmd)
+		if err != nil {
+			return &drivers.DriverError{
+				Driver: d.Type(),
+				Op:     "mount",
+				Entry:  entry.Name,
+				Err:    err,
+			}
+		}
+	}
+
+	if err := interaction.RunCommand(cmd); err != nil {
 		return &drivers.DriverError{
 			Driver: d.Type(),
 			Op:     "mount",
 			Entry:  entry.Name,
-			Err:    fmt.Errorf("mount.cifs failed: %w\nOutput: %s", err, string(output)),
+			Err:    fmt.Errorf("mount.cifs failed: %w", err),
 		}
 	}
 
@@ -77,13 +93,26 @@ func (d *Driver) Mount(ctx context.Context, entry *config.MountEntry) error {
 
 func (d *Driver) Unmount(ctx context.Context, entry *config.MountEntry) error {
 	cmd := exec.CommandContext(ctx, "umount", entry.MountDirPath)
-	output, err := cmd.CombinedOutput()
-	if err != nil {
+
+	var err error
+	if interaction.NeedsPrivilege() {
+		cmd, err = interaction.WrapWithSudo(cmd)
+		if err != nil {
+			return &drivers.DriverError{
+				Driver: d.Type(),
+				Op:     "unmount",
+				Entry:  entry.Name,
+				Err:    err,
+			}
+		}
+	}
+
+	if err := interaction.RunCommand(cmd); err != nil {
 		return &drivers.DriverError{
 			Driver: d.Type(),
 			Op:     "unmount",
 			Entry:  entry.Name,
-			Err:    fmt.Errorf("umount failed: %w\nOutput: %s", err, string(output)),
+			Err:    fmt.Errorf("umount failed: %w", err),
 		}
 	}
 	return nil
@@ -177,26 +206,4 @@ func (d *Driver) buildMountCommand(entry *config.MountEntry, credsFile string) *
 	}
 
 	return exec.Command("mount.cifs", args...)
-}
-
-func (d *Driver) MountWithSudo(entry *config.MountEntry) error {
-	credsFile, err := d.createCredentialFile(entry)
-	if err != nil {
-		return err
-	}
-	defer os.Remove(credsFile)
-
-	cmd := d.buildMountCommand(entry, credsFile)
-	if err := interaction.RunWithSudo(cmd); err != nil {
-		return fmt.Errorf("mount with sudo failed: %w", err)
-	}
-	return nil
-}
-
-func (d *Driver) UnmountWithSudo(mountPath string) error {
-	cmd := exec.Command("umount", mountPath)
-	if err := interaction.RunWithSudo(cmd); err != nil {
-		return fmt.Errorf("unmount with sudo failed: %w", err)
-	}
-	return nil
 }

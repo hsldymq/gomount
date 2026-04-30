@@ -30,6 +30,9 @@ type Driver interface {
 	// Validate 验证配置是否有效
 	// 在加载配置时调用，提前发现配置错误
 	Validate(entry *config.MountEntry) error
+
+	// NeedsSudo 返回该驱动是否需要 root 权限执行挂载/卸载
+	NeedsSudo() bool
 }
 
 // MountStatus 挂载状态信息

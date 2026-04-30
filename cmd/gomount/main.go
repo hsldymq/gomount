@@ -87,7 +87,6 @@ func main() {
 	}
 }
 
-// loadConfig 从指定或默认路径加载配置
 func loadConfig() (*config.Config, error) {
 	path := configPath
 	if path == "" {
@@ -107,7 +106,6 @@ func loadConfig() (*config.Config, error) {
 	return cfg, nil
 }
 
-// createDriverManager 创建并初始化驱动管理器
 func createDriverManager(cfg *config.Config) *drivers.Manager {
 	mgr := drivers.NewManager(cfg)
 	mgr.RegisterDriver(smbDriver.NewDriver())
@@ -116,30 +114,6 @@ func createDriverManager(cfg *config.Config) *drivers.Manager {
 	return mgr
 }
 
-// prepareMountEntry 准备挂载条目，如果需要则提示输入密码
-func prepareMountEntry(entry *config.MountEntry) error {
-	if entry.SMB != nil && !entry.HasPassword() {
-		fmt.Printf("Mounting: %s\n", entry.Name)
-		fmt.Printf("SMB Address: %s:%d\n", entry.SMB.Addr, entry.SMB.GetPort())
-		fmt.Printf("Username: %s\n", entry.SMB.Username)
-		fmt.Println()
-
-		password, err := interaction.PromptPassword("Enter password: ", true)
-		if err != nil {
-			return fmt.Errorf("failed to read password: %w", err)
-		}
-		entry.SMB.Password = password
-	}
-
-	return nil
-}
-
-// getDriverType 返回条目的驱动类型
-func getDriverType(entry *config.MountEntry) string {
-	return entry.Type
-}
-
-// runList 实现列表命令
 func runList(cmd *cobra.Command, args []string) error {
 	cfg, err := loadConfig()
 	if err != nil {
@@ -157,7 +131,6 @@ func runList(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-// runMount 实现挂载命令
 func runMount(cmd *cobra.Command, args []string) error {
 	cfg, err := loadConfig()
 	if err != nil {
@@ -196,6 +169,10 @@ func runMount(cmd *cobra.Command, args []string) error {
 	var successCount, failCount int
 	fmt.Printf("Mounting %d share(s)...\n\n", len(entries))
 
+	if err := interaction.EnsureSudoCached(); err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: sudo authentication failed: %v\n", err)
+	}
+
 	for i, entry := range entries {
 		fmt.Printf("[%d/%d] %s\n", i+1, len(entries), entry.Name)
 
@@ -205,15 +182,7 @@ func runMount(cmd *cobra.Command, args []string) error {
 			continue
 		}
 
-		if err := prepareMountEntry(entry); err != nil {
-			fmt.Fprintf(os.Stderr, "  Failed to prepare: %v\n\n", err)
-			failCount++
-			continue
-		}
-
-		driverType := getDriverType(entry)
-
-		switch driverType {
+		switch entry.Type {
 		case "smb":
 			fmt.Printf("  From: //%s:%d/%s\n", entry.SMB.Addr, entry.SMB.GetPort(), entry.SMB.ShareName)
 		case "sshfs":
@@ -224,19 +193,9 @@ func runMount(cmd *cobra.Command, args []string) error {
 		fmt.Printf("  To: %s\n", entry.MountDirPath)
 
 		if err := mgr.Mount(ctx, entry.Name); err != nil {
-			// 对于 SMB 驱动，尝试使用 sudo
-			if driverType == "smb" && interaction.NeedsPrivilege() {
-				fmt.Println("  Privilege escalation required...")
-				if err := mountWithSudo(mgr, entry); err != nil {
-					fmt.Fprintf(os.Stderr, "  Failed: %v\n\n", err)
-					failCount++
-					continue
-				}
-			} else {
-				fmt.Fprintf(os.Stderr, "  Failed: %v\n\n", err)
-				failCount++
-				continue
-			}
+			fmt.Fprintf(os.Stderr, "  Failed: %v\n\n", err)
+			failCount++
+			continue
 		}
 
 		fmt.Println("  Successfully mounted")
@@ -255,7 +214,6 @@ func runMount(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-// runUmount 实现卸载命令
 func runUmount(cmd *cobra.Command, args []string) error {
 	cfg, err := loadConfig()
 	if err != nil {
@@ -302,22 +260,10 @@ func runUmount(cmd *cobra.Command, args []string) error {
 		fmt.Printf("[%d/%d] %s\n", i+1, len(entries), entry.Name)
 		fmt.Printf("  From: %s\n", entry.MountDirPath)
 
-		driverType := getDriverType(entry)
-
 		if err := mgr.Unmount(ctx, entry.Name); err != nil {
-			// 对于 SMB 驱动，尝试使用 sudo
-			if driverType == "smb" && interaction.NeedsPrivilege() {
-				fmt.Println("  Privilege escalation required...")
-				if err := umountWithSudo(mgr, entry.MountDirPath); err != nil {
-					fmt.Fprintf(os.Stderr, "  Failed: %v\n\n", err)
-					failCount++
-					continue
-				}
-			} else {
-				fmt.Fprintf(os.Stderr, "  Failed: %v\n\n", err)
-				failCount++
-				continue
-			}
+			fmt.Fprintf(os.Stderr, "  Failed: %v\n\n", err)
+			failCount++
+			continue
 		}
 
 		fmt.Println("  Successfully unmounted")
@@ -334,30 +280,6 @@ func runUmount(cmd *cobra.Command, args []string) error {
 	}
 
 	return nil
-}
-
-func mountWithSudo(mgr *drivers.Manager, entry *config.MountEntry) error {
-	d, err := mgr.GetDriver("smb")
-	if err != nil {
-		return err
-	}
-	smb, ok := d.(*smbDriver.Driver)
-	if !ok {
-		return fmt.Errorf("unexpected driver type for smb")
-	}
-	return smb.MountWithSudo(entry)
-}
-
-func umountWithSudo(mgr *drivers.Manager, mountPath string) error {
-	d, err := mgr.GetDriver("smb")
-	if err != nil {
-		return err
-	}
-	smb, ok := d.(*smbDriver.Driver)
-	if !ok {
-		return fmt.Errorf("unexpected driver type for smb")
-	}
-	return smb.UnmountWithSudo(mountPath)
 }
 
 const configExample = `# gomount 配置文件示例

@@ -1,14 +1,11 @@
 package interaction
 
 import (
-	"bytes"
 	"fmt"
 	"os"
 	"os/exec"
 	"os/user"
 	"strings"
-
-	"golang.org/x/term"
 )
 
 func IsRoot() bool {
@@ -34,25 +31,48 @@ func CanSudoWithoutPassword() bool {
 	return err == nil
 }
 
-func PromptSudoPassword() (string, error) {
-	fmt.Fprintln(os.Stderr, "\nsudo 密码 (输入时不显示): ")
-	fmt.Fprint(os.Stderr, "密码: ")
-	os.Stderr.Sync()
-
-	passwordBytes, err := term.ReadPassword(int(os.Stdin.Fd()))
-	fmt.Fprintln(os.Stderr)
-	if err != nil {
-		return "", err
+func WrapWithSudo(cmd *exec.Cmd) (*exec.Cmd, error) {
+	if IsRoot() {
+		return cmd, nil
 	}
 
-	password := strings.TrimSpace(string(passwordBytes))
+	if !HasSudo() {
+		return nil, fmt.Errorf("privilege escalation required but sudo is not available")
+	}
 
-	return password, nil
+	var args []string
+
+	if cmd.Env != nil {
+		currentEnv := make(map[string]struct{}, len(os.Environ()))
+		for _, e := range os.Environ() {
+			k, _, _ := strings.Cut(e, "=")
+			currentEnv[k] = struct{}{}
+		}
+		var extraEnv []string
+		for _, e := range cmd.Env {
+			k, _, _ := strings.Cut(e, "=")
+			if _, ok := currentEnv[k]; !ok {
+				extraEnv = append(extraEnv, e)
+			}
+		}
+		if len(extraEnv) > 0 {
+			args = append(args, "env")
+			args = append(args, extraEnv...)
+		}
+	}
+
+	args = append(args, cmd.Path)
+	args = append(args, cmd.Args[1:]...)
+
+	sudoCmd := exec.Command("sudo", args...)
+	sudoCmd.Env = cmd.Env
+
+	return sudoCmd, nil
 }
 
-func RunWithSudo(cmd *exec.Cmd) error {
+func EnsureSudoCached() error {
 	if IsRoot() {
-		return cmd.Run()
+		return nil
 	}
 
 	if !HasSudo() {
@@ -60,51 +80,12 @@ func RunWithSudo(cmd *exec.Cmd) error {
 	}
 
 	if CanSudoWithoutPassword() {
-		return runSudoCommand(cmd, "")
+		return nil
 	}
 
-	password, err := PromptSudoPassword()
-	if err != nil {
-		return fmt.Errorf("failed to read password: %w", err)
-	}
-
-	return runSudoCommand(cmd, password)
-}
-
-func runSudoCommand(cmd *exec.Cmd, password string) error {
-	sudoArgs := []string{"-S", "-p", ""}
-	sudoArgs = append(sudoArgs, cmd.Path)
-	sudoArgs = append(sudoArgs, cmd.Args[1:]...)
-
-	sudoCmd := exec.Command("sudo", sudoArgs...)
-
-	// 捕获 stderr 以显示详细错误
-	var stderrBuf bytes.Buffer
-	sudoCmd.Stderr = &stderrBuf
-
-	if password != "" {
-		stdin, err := sudoCmd.StdinPipe()
-		if err != nil {
-			return fmt.Errorf("failed to create stdin pipe: %w", err)
-		}
-
-		go func() {
-			defer stdin.Close()
-			fmt.Fprintln(stdin, password)
-		}()
-	} else {
-		sudoCmd.Stdin = os.Stdin
-	}
-
-	sudoCmd.Stdout = cmd.Stdout
-
-	if err := sudoCmd.Run(); err != nil {
-		stderr := stderrBuf.String()
-		if stderr != "" {
-			return fmt.Errorf("%s", strings.TrimSpace(stderr))
-		}
-		return fmt.Errorf("sudo command failed: %w", err)
-	}
-
-	return nil
+	cmd := exec.Command("sudo", "-v")
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
 }
