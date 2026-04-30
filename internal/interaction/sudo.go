@@ -79,10 +79,6 @@ func EnsureSudoCached() error {
 		return fmt.Errorf("privilege escalation required but sudo is not available")
 	}
 
-	if CanSudoWithoutPassword() {
-		return nil
-	}
-
 	cmd := exec.Command("sudo", "-v")
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout

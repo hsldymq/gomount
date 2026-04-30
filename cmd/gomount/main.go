@@ -256,6 +256,10 @@ func runUmount(cmd *cobra.Command, args []string) error {
 	var successCount, failCount int
 	fmt.Printf("Unmounting %d share(s)...\n\n", len(entries))
 
+	if err := interaction.EnsureSudoCached(); err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: sudo authentication failed: %v\n", err)
+	}
+
 	for i, entry := range entries {
 		fmt.Printf("[%d/%d] %s\n", i+1, len(entries), entry.Name)
 		fmt.Printf("  From: %s\n", entry.MountDirPath)
