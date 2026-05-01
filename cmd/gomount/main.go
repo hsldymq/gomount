@@ -2,8 +2,10 @@ package main
 
 import (
 	"context"
+	_ "embed"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/hsldymq/gomount/internal/config"
 	"github.com/hsldymq/gomount/internal/drivers"
@@ -52,7 +54,7 @@ var mountCmd = &cobra.Command{
 
 var umountCmd = &cobra.Command{
 	Use:     "umount [name]",
-	Aliases: []string{"u", "unmount"},
+	Aliases: []string{"u"},
 	Short:   "卸载 SMB 共享",
 	Long: `卸载 SMB 共享。如果提供了名称，则卸载该特定共享。
 如果未提供名称，则显示已挂载共享的交互式选择菜单。`,
@@ -70,6 +72,9 @@ var configExampleCmd = &cobra.Command{
 	},
 }
 
+//go:embed usage.tmpl
+var usageTemplate string
+
 func init() {
 	rootCmd.PersistentFlags().StringVarP(&configPath, "config", "c", "",
 		fmt.Sprintf("配置文件路径 (默认: %s)", config.DefaultConfigPath()))
@@ -78,6 +83,14 @@ func init() {
 	rootCmd.AddCommand(mountCmd)
 	rootCmd.AddCommand(umountCmd)
 	rootCmd.AddCommand(configExampleCmd)
+
+	cobra.AddTemplateFunc("cmdName", func(name string, aliases []string) string {
+		if len(aliases) == 0 {
+			return name
+		}
+		return name + " (" + strings.Join(aliases, ", ") + ")"
+	})
+	rootCmd.SetUsageTemplate(usageTemplate)
 }
 
 func main() {
