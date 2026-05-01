@@ -91,6 +91,9 @@ var (
 	DimStyle = lipgloss.NewStyle().
 			Foreground(dimColor)
 
+	SeparatorStyle = lipgloss.NewStyle().
+			Foreground(subtleColor)
+
 	// Help text style
 	HelpStyle = lipgloss.NewStyle().
 			Foreground(subtleColor).

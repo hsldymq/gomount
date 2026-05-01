@@ -209,16 +209,21 @@ func (m SelectorModel) renderItems() string {
 	for i := m.Scroll; i < end; i++ {
 		entry := m.Mounts[i]
 		checkbox := checkboxText(entry, i, m.SelectedMap)
-		rest := m.renderItemText(i, entry)
+		segments := entrySegments(entry)
 
 		if i == m.Cursor {
-			bg := lipgloss.NewStyle().Background(lipgloss.Color("236"))
-			cursorSeg := CursorArrowStyle.Background(lipgloss.Color("236")).Render("▸")
-			checkboxSeg := bg.Render(" " + checkbox + " ")
-			restSeg := bg.Render(rest)
+			bg := lipgloss.Color("237")
+			cursorSeg := CursorArrowStyle.Background(bg).Render("▸")
+			checkboxSeg := lipgloss.NewStyle().Background(bg).Render(" " + checkbox + " ")
+			restSeg := renderSegments(segments, bg)
 			b.WriteString(lipgloss.JoinHorizontal(lipgloss.Left, cursorSeg, checkboxSeg, restSeg))
 		} else {
-			b.WriteString(fmt.Sprintf("  %s %s", checkbox, rest))
+			var parts []string
+			parts = append(parts, " ", " ", checkbox, " ")
+			for _, seg := range segments {
+				parts = append(parts, seg.Style.Render(seg.Text))
+			}
+			b.WriteString(strings.Join(parts, ""))
 		}
 		b.WriteString("\n")
 	}
@@ -227,23 +232,44 @@ func (m SelectorModel) renderItems() string {
 }
 
 // renderItem 渲染单个条目
-func (m SelectorModel) renderItemText(index int, entry config.MountEntry) string {
-	var parts []string
+type lineSegment struct {
+	Text  string
+	Style lipgloss.Style
+}
 
-	parts = append(parts, fmt.Sprintf("%s", entry.Name))
+func entrySegments(entry config.MountEntry) []lineSegment {
+	var segments []lineSegment
 
 	var addrInfo string
 	switch {
 	case entry.SMB != nil:
-		addrInfo = fmt.Sprintf("(%s:%d/%s)", entry.SMB.Addr, entry.SMB.GetPort(), entry.SMB.ShareName)
+		addrInfo = fmt.Sprintf("//%s:%d/%s", entry.SMB.Addr, entry.SMB.GetPort(), entry.SMB.ShareName)
 	case entry.SSHFS != nil:
-		addrInfo = fmt.Sprintf("(%s:%s)", entry.SSHFS.Host, entry.SSHFS.RemotePath)
+		addrInfo = fmt.Sprintf("%s:%s", entry.SSHFS.Host, entry.SSHFS.RemotePath)
 	case entry.WebDAV != nil:
-		addrInfo = fmt.Sprintf("(%s)", entry.WebDAV.URL)
+		addrInfo = entry.WebDAV.URL
 	}
-	parts = append(parts, addrInfo)
 
-	return strings.Join(parts, " ")
+	segments = append(segments,
+		lineSegment{Text: entry.Name},
+		lineSegment{Text: " ", Style: lipgloss.NewStyle()},
+		lineSegment{Text: "›", Style: SeparatorStyle},
+		lineSegment{Text: " ", Style: lipgloss.NewStyle()},
+		lineSegment{Text: addrInfo},
+		lineSegment{Text: " ", Style: lipgloss.NewStyle()},
+		lineSegment{Text: fmt.Sprintf("(%s)", entry.Type)},
+	)
+
+	return segments
+}
+
+func renderSegments(segments []lineSegment, bg lipgloss.Color) string {
+	rendered := make([]string, len(segments))
+	for i, seg := range segments {
+		style := seg.Style.Background(bg)
+		rendered[i] = style.Render(seg.Text)
+	}
+	return lipgloss.JoinHorizontal(lipgloss.Left, rendered...)
 }
 
 // SelectEntry 显示选择器并返回选中的条目（支持多选）
