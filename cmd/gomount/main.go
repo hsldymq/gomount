@@ -84,11 +84,25 @@ func init() {
 	rootCmd.AddCommand(umountCmd)
 	rootCmd.AddCommand(configExampleCmd)
 
-	cobra.AddTemplateFunc("cmdName", func(name string, aliases []string) string {
+	cmdNameFunc := func(name string, aliases []string) string {
 		if len(aliases) == 0 {
 			return name
 		}
 		return name + " (" + strings.Join(aliases, ", ") + ")"
+	}
+	cobra.AddTemplateFunc("cmdName", cmdNameFunc)
+	cobra.AddTemplateFunc("cmdNamePadding", func(cmd *cobra.Command) int {
+		maxLen := 0
+		for _, c := range cmd.Commands() {
+			if !c.IsAvailableCommand() {
+				continue
+			}
+			l := len(cmdNameFunc(c.Name(), c.Aliases))
+			if l > maxLen {
+				maxLen = l
+			}
+		}
+		return maxLen
 	})
 	rootCmd.SetUsageTemplate(usageTemplate)
 }
