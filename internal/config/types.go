@@ -17,6 +17,8 @@ type MountEntry struct {
 	SSHFS  *SSHFSConfig  `yaml:"sshfs,omitempty" mapstructure:"sshfs"`
 	WebDAV *WebDAVConfig `yaml:"webdav,omitempty" mapstructure:"webdav"`
 
+	SSHTunnel *SSHTunnelConfig `yaml:"ssh_tunnel,omitempty" mapstructure:"ssh_tunnel"`
+
 	Options   map[string]interface{} `yaml:"options,omitempty" mapstructure:"options"`
 	IsMounted bool                   `yaml:"-" mapstructure:"-"`
 }
@@ -41,6 +43,10 @@ type WebDAVConfig struct {
 	URL      string `yaml:"url" mapstructure:"url" validate:"required,url"`
 	Username string `yaml:"username,omitempty" mapstructure:"username"`
 	Password string `yaml:"password,omitempty" mapstructure:"password"`
+}
+
+type SSHTunnelConfig struct {
+	Host string `yaml:"host" mapstructure:"host" validate:"required"`
 }
 
 func (m *MountEntry) GetMountPath() string {

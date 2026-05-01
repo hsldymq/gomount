@@ -396,6 +396,18 @@ mounts:
       # password: pass
     mount_dir_path: /mnt/cloud
 
+  # 通过 SSH 隧道挂载 SMB（远程内网 SMB，需经跳板机访问）
+  # ssh_tunnel.host 为跳板机地址，使用 ~/.ssh/config 中的别名
+  # - name: remote-nas
+  #   type: smb
+  #   smb:
+  #     addr: 10.0.6.253           # 跳板机可达的内网 SMB 地址
+  #     share_name: data
+  #     username: smbuser
+  #   ssh_tunnel:
+  #     host: bastion.example.com  # 跳板机（走 ~/.ssh/config）
+  #   mount_dir_path: /mnt/remote-nas
+
 # 提示:
 #   - mount_dir_path 支持 ~ 展开为用户主目录
 #   - 建议设置配置文件权限: chmod 600 ~/.config/gomount_config.yaml

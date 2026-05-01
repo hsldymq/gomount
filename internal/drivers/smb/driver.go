@@ -9,6 +9,7 @@ import (
 	"github.com/hsldymq/gomount/internal/config"
 	"github.com/hsldymq/gomount/internal/drivers"
 	"github.com/hsldymq/gomount/internal/interaction"
+	"github.com/hsldymq/gomount/internal/sshtunnel"
 	"github.com/hsldymq/gomount/internal/status"
 )
 
@@ -54,6 +55,23 @@ func (d *Driver) Mount(ctx context.Context, entry *config.MountEntry) error {
 		}
 	}
 
+	smbAddr := entry.SMB.Addr
+	smbPort := entry.SMB.GetPort()
+	if entry.SSHTunnel != nil {
+		remoteAddr := fmt.Sprintf("%s:%d", entry.SMB.Addr, smbPort)
+		localPort, err := sshtunnel.EstablishForMount(ctx, entry.Name, entry.SSHTunnel.Host, remoteAddr)
+		if err != nil {
+			return &drivers.DriverError{
+				Driver: d.Type(),
+				Op:     "mount",
+				Entry:  entry.Name,
+				Err:    fmt.Errorf("failed to establish ssh tunnel: %w", err),
+			}
+		}
+		smbAddr = "localhost"
+		smbPort = localPort
+	}
+
 	credsFile, err := d.createCredentialFile(entry)
 	if err != nil {
 		return &drivers.DriverError{
@@ -65,7 +83,7 @@ func (d *Driver) Mount(ctx context.Context, entry *config.MountEntry) error {
 	}
 	defer os.Remove(credsFile)
 
-	cmd := d.buildMountCommand(entry, credsFile)
+	cmd := d.buildMountCommand(entry, credsFile, smbAddr, smbPort)
 
 	if interaction.NeedsPrivilege() {
 		cmd, err = interaction.WrapWithSudo(cmd)
@@ -80,6 +98,9 @@ func (d *Driver) Mount(ctx context.Context, entry *config.MountEntry) error {
 	}
 
 	if err := interaction.RunCommand(cmd); err != nil {
+		if entry.SSHTunnel != nil {
+			sshtunnel.Teardown(entry.Name)
+		}
 		return &drivers.DriverError{
 			Driver: d.Type(),
 			Op:     "mount",
@@ -115,6 +136,11 @@ func (d *Driver) Unmount(ctx context.Context, entry *config.MountEntry) error {
 			Err:    fmt.Errorf("umount failed: %w", err),
 		}
 	}
+
+	if entry.SSHTunnel != nil {
+		_ = sshtunnel.Teardown(entry.Name)
+	}
+
 	return nil
 }
 
@@ -189,12 +215,12 @@ func (d *Driver) createCredentialFile(entry *config.MountEntry) (string, error) 
 	return tmpFile.Name(), nil
 }
 
-func (d *Driver) buildMountCommand(entry *config.MountEntry, credsFile string) *exec.Cmd {
-	smbAddr := fmt.Sprintf("//%s/%s", entry.SMB.Addr, entry.SMB.ShareName)
+func (d *Driver) buildMountCommand(entry *config.MountEntry, credsFile, addr string, port int) *exec.Cmd {
+	smbAddr := fmt.Sprintf("//%s/%s", addr, entry.SMB.ShareName)
 
 	options := fmt.Sprintf("credentials=%s,port=%d,file_mode=0755,dir_mode=0755,uid=%d,gid=%d",
 		credsFile,
-		entry.SMB.GetPort(),
+		port,
 		os.Getuid(),
 		os.Getgid(),
 	)
