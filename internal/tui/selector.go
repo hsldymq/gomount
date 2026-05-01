@@ -8,10 +8,24 @@ import (
 	"github.com/hsldymq/gomount/internal/config"
 )
 
+type SelectionState int
+
+const (
+	SelNone    SelectionState = iota
+	SelMount
+	SelUnmount
+)
+
 // SelectionResult 是选择的结果
 type SelectionResult struct {
 	Entries []*config.MountEntry
 	Cancel  bool
+}
+
+type MountActionResult struct {
+	ToMount   []*config.MountEntry
+	ToUnmount []*config.MountEntry
+	Cancelled bool
 }
 
 // SelectorModel 交互式选择的 BubbleTea 模型
@@ -21,11 +35,12 @@ type SelectorModel struct {
 	Cursor      int
 	Scroll      int
 	Selected    []*config.MountEntry
-	SelectedMap map[int]bool // 追踪选中的条目索引
+	SelectedMap map[int]SelectionState
 	Cancelled   bool
 	Height      int
 	Width       int
 	ShowStatus  bool
+	NoFallback  bool
 }
 
 // NewSelectorModel 创建新的选择器模型
@@ -35,7 +50,7 @@ func NewSelectorModel(title string, mounts []config.MountEntry, showStatus bool)
 		Mounts:      mounts,
 		Cursor:      0,
 		Scroll:      0,
-		SelectedMap: make(map[int]bool),
+		SelectedMap: make(map[int]SelectionState),
 		ShowStatus:  showStatus,
 	}
 }
@@ -55,26 +70,32 @@ func (m SelectorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 
 		case "enter":
-			// 收集所有选中的条目
 			m.Selected = nil
 			for i := range m.Mounts {
-				if m.SelectedMap[i] {
+				if m.SelectedMap[i] != SelNone {
 					m.Selected = append(m.Selected, &m.Mounts[i])
 				}
 			}
-			// 如果没有选中任何条目，且当前有可用条目，则选中当前光标所在的条目
-			if len(m.Selected) == 0 && len(m.Mounts) > 0 {
+			if !m.NoFallback && len(m.Selected) == 0 && len(m.Mounts) > 0 {
 				m.Selected = []*config.MountEntry{&m.Mounts[m.Cursor]}
 			}
 			return m, tea.Quit
 
 		case " ":
-			// 空格键切换选中状态
 			if len(m.Mounts) > 0 {
-				if m.SelectedMap[m.Cursor] {
-					delete(m.SelectedMap, m.Cursor)
+				current := m.SelectedMap[m.Cursor]
+				if m.Mounts[m.Cursor].IsMounted {
+					if current == SelUnmount {
+						m.SelectedMap[m.Cursor] = SelNone
+					} else {
+						m.SelectedMap[m.Cursor] = SelUnmount
+					}
 				} else {
-					m.SelectedMap[m.Cursor] = true
+					if current == SelMount {
+						m.SelectedMap[m.Cursor] = SelNone
+					} else {
+						m.SelectedMap[m.Cursor] = SelMount
+					}
 				}
 			}
 
@@ -190,8 +211,12 @@ func (m SelectorModel) renderItems() string {
 func (m SelectorModel) renderItem(index int, entry config.MountEntry) string {
 	// 显示选中标记
 	checkbox := "[ ]"
-	if m.SelectedMap[index] {
-		checkbox = "[✓]"
+	if state, ok := m.SelectedMap[index]; ok && state != SelNone {
+		checkbox = CheckMarkPendingStyle.Render("[✓]")
+	} else if entry.IsMounted {
+		if _, exists := m.SelectedMap[index]; !exists {
+			checkbox = CheckMarkMountedStyle.Render("[✓]")
+		}
 	}
 
 	var parts []string
@@ -265,4 +290,36 @@ func SelectUnmountEntry(mounts []config.MountEntry) ([]*config.MountEntry, bool)
 	}
 
 	return SelectEntry("Select shares to unmount:", mounted, true)
+}
+
+func SelectMountAction(mounts []config.MountEntry) *MountActionResult {
+	model := NewSelectorModel("Select shares to mount/unmount:", mounts, true)
+	model.NoFallback = true
+	program := tea.NewProgram(model)
+
+	finalModel, err := program.Run()
+	if err != nil {
+		return &MountActionResult{Cancelled: true}
+	}
+
+	m, ok := finalModel.(SelectorModel)
+	if !ok {
+		return &MountActionResult{Cancelled: true}
+	}
+
+	if m.Cancelled {
+		return &MountActionResult{Cancelled: true}
+	}
+
+	result := &MountActionResult{}
+	for i := range m.Mounts {
+		switch m.SelectedMap[i] {
+		case SelMount:
+			result.ToMount = append(result.ToMount, &m.Mounts[i])
+		case SelUnmount:
+			result.ToUnmount = append(result.ToUnmount, &m.Mounts[i])
+		}
+	}
+
+	return result
 }

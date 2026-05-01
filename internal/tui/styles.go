@@ -109,6 +109,14 @@ var (
         Padding(0, 1).
         Background(lipgloss.Color("236"))
 
+    CheckMarkMountedStyle = lipgloss.NewStyle().
+        Foreground(lipgloss.Color("42")).
+        Bold(true)
+
+    CheckMarkPendingStyle = lipgloss.NewStyle().
+        Foreground(lipgloss.Color("86")).
+        Bold(true)
+
     // Table row styles
     TableRowStyle = lipgloss.NewStyle().
         Padding(0, 1)
