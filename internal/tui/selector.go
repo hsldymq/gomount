@@ -5,16 +5,30 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/hsldymq/gomount/internal/config"
 )
 
 type SelectionState int
 
 const (
-	SelNone    SelectionState = iota
+	SelNone SelectionState = iota
 	SelMount
 	SelUnmount
 )
+
+func checkboxText(entry config.MountEntry, index int, selectedMap map[int]SelectionState) string {
+	if !entry.IsMounted {
+		if state, ok := selectedMap[index]; ok && state == SelMount {
+			return CheckMarkPendingStyle.Render("[✓]")
+		}
+		return "[ ]"
+	}
+	if _, exists := selectedMap[index]; !exists {
+		return CheckMarkMountedStyle.Render("[✓]")
+	}
+	return CheckMarkUnmountStyle.Render("[ ]")
+}
 
 // SelectionResult 是选择的结果
 type SelectionResult struct {
@@ -83,14 +97,14 @@ func (m SelectorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case " ":
 			if len(m.Mounts) > 0 {
-				current := m.SelectedMap[m.Cursor]
 				if m.Mounts[m.Cursor].IsMounted {
-					if current == SelUnmount {
-						m.SelectedMap[m.Cursor] = SelNone
+					if _, exists := m.SelectedMap[m.Cursor]; exists {
+						delete(m.SelectedMap, m.Cursor)
 					} else {
-						m.SelectedMap[m.Cursor] = SelUnmount
+						m.SelectedMap[m.Cursor] = SelNone
 					}
 				} else {
+					current := m.SelectedMap[m.Cursor]
 					if current == SelMount {
 						m.SelectedMap[m.Cursor] = SelNone
 					} else {
@@ -193,13 +207,18 @@ func (m SelectorModel) renderItems() string {
 	end := min(m.Scroll+visibleItems, len(m.Mounts))
 
 	for i := m.Scroll; i < end; i++ {
-		item := m.renderItem(i, m.Mounts[i])
-		cursor := " "
+		entry := m.Mounts[i]
+		checkbox := checkboxText(entry, i, m.SelectedMap)
+		rest := m.renderItemText(i, entry)
+
 		if i == m.Cursor {
-			cursor = "▸"
-			b.WriteString(SelectedItemStyle.Render(fmt.Sprintf("%s %s", cursor, item)))
+			bg := lipgloss.NewStyle().Background(lipgloss.Color("236"))
+			cursorSeg := CursorArrowStyle.Background(lipgloss.Color("236")).Render("▸")
+			checkboxSeg := bg.Render(" " + checkbox + " ")
+			restSeg := bg.Render(rest)
+			b.WriteString(lipgloss.JoinHorizontal(lipgloss.Left, cursorSeg, checkboxSeg, restSeg))
 		} else {
-			b.WriteString(NormalItemStyle.Render(fmt.Sprintf("%s %s", cursor, item)))
+			b.WriteString(fmt.Sprintf("  %s %s", checkbox, rest))
 		}
 		b.WriteString("\n")
 	}
@@ -208,21 +227,9 @@ func (m SelectorModel) renderItems() string {
 }
 
 // renderItem 渲染单个条目
-func (m SelectorModel) renderItem(index int, entry config.MountEntry) string {
-	// 显示选中标记
-	checkbox := "[ ]"
-	if state, ok := m.SelectedMap[index]; ok && state != SelNone {
-		checkbox = CheckMarkPendingStyle.Render("[✓]")
-	} else if entry.IsMounted {
-		if _, exists := m.SelectedMap[index]; !exists {
-			checkbox = CheckMarkMountedStyle.Render("[✓]")
-		}
-	}
-
+func (m SelectorModel) renderItemText(index int, entry config.MountEntry) string {
 	var parts []string
-	parts = append(parts, checkbox)
 
-	// 名称
 	parts = append(parts, fmt.Sprintf("%s", entry.Name))
 
 	var addrInfo string
@@ -235,15 +242,6 @@ func (m SelectorModel) renderItem(index int, entry config.MountEntry) string {
 		addrInfo = fmt.Sprintf("(%s)", entry.WebDAV.URL)
 	}
 	parts = append(parts, addrInfo)
-
-	// 状态（如果启用）
-	if m.ShowStatus {
-		status := "Unmounted"
-		if entry.IsMounted {
-			status = "Mounted"
-		}
-		parts = append(parts, fmt.Sprintf("[%s]", status))
-	}
 
 	return strings.Join(parts, " ")
 }
@@ -313,11 +311,12 @@ func SelectMountAction(mounts []config.MountEntry) *MountActionResult {
 
 	result := &MountActionResult{}
 	for i := range m.Mounts {
-		switch m.SelectedMap[i] {
-		case SelMount:
+		if m.Mounts[i].IsMounted {
+			if _, exists := m.SelectedMap[i]; exists {
+				result.ToUnmount = append(result.ToUnmount, &m.Mounts[i])
+			}
+		} else if m.SelectedMap[i] == SelMount {
 			result.ToMount = append(result.ToMount, &m.Mounts[i])
-		case SelUnmount:
-			result.ToUnmount = append(result.ToUnmount, &m.Mounts[i])
 		}
 	}
 
