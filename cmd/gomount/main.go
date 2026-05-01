@@ -144,27 +144,16 @@ func runMount(cmd *cobra.Command, args []string) error {
 		fmt.Fprintf(os.Stderr, "Warning: failed to refresh mount status: %v\n", err)
 	}
 
-	var entries []*config.MountEntry
-
 	if len(args) == 0 {
-		selected, cancelled := tui.SelectMountEntry(cfg.Mounts)
-		if cancelled {
-			fmt.Println("Cancelled")
-			return nil
-		}
-		if selected == nil || len(selected) == 0 {
-			fmt.Println("No shares selected")
-			return nil
-		}
-		entries = selected
-	} else {
-		name := args[0]
-		entry, found := cfg.FindByName(name)
-		if !found {
-			return fmt.Errorf("mount entry '%s' not found", name)
-		}
-		entries = []*config.MountEntry{entry}
+		return runMountInteractive(cfg, mgr, ctx)
 	}
+
+	name := args[0]
+	entry, found := cfg.FindByName(name)
+	if !found {
+		return fmt.Errorf("mount entry '%s' not found", name)
+	}
+	entries := []*config.MountEntry{entry}
 
 	var successCount, failCount int
 	fmt.Printf("Mounting %d share(s)...\n\n", len(entries))
@@ -209,6 +198,98 @@ func runMount(cmd *cobra.Command, args []string) error {
 
 	if failCount > 0 && successCount == 0 {
 		return fmt.Errorf("%d mount(s) failed", failCount)
+	}
+
+	return nil
+}
+
+func runMountInteractive(cfg *config.Config, mgr *drivers.Manager, ctx context.Context) error {
+	result := tui.SelectMountAction(cfg.Mounts)
+	if result.Cancelled {
+		fmt.Println("Cancelled")
+		return nil
+	}
+	if len(result.ToMount) == 0 && len(result.ToUnmount) == 0 {
+		return nil
+	}
+
+	var successCount, failCount int
+	sudoCached := false
+
+	if len(result.ToUnmount) > 0 {
+		fmt.Printf("Unmounting %d share(s)...\n\n", len(result.ToUnmount))
+		if err := interaction.EnsureSudoCached(); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: sudo authentication failed: %v\n", err)
+		}
+		sudoCached = true
+
+		for i, entry := range result.ToUnmount {
+			fmt.Printf("[%d/%d] %s\n", i+1, len(result.ToUnmount), entry.Name)
+			fmt.Printf("  From: %s\n", entry.MountDirPath)
+
+			if err := mgr.Unmount(ctx, entry.Name); err != nil {
+				fmt.Fprintf(os.Stderr, "  Failed: %v\n\n", err)
+				failCount++
+				continue
+			}
+
+			fmt.Println("  Successfully unmounted")
+			successCount++
+			fmt.Println()
+		}
+		fmt.Println("==========================================")
+		fmt.Printf("Unmount complete: %d succeeded, %d failed\n", successCount, failCount)
+		fmt.Println("==========================================")
+		fmt.Println()
+	}
+
+	mountSuccess, mountFail := 0, 0
+	if len(result.ToMount) > 0 {
+		fmt.Printf("Mounting %d share(s)...\n\n", len(result.ToMount))
+		if !sudoCached {
+			if err := interaction.EnsureSudoCached(); err != nil {
+				fmt.Fprintf(os.Stderr, "Warning: sudo authentication failed: %v\n", err)
+			}
+		}
+
+		for i, entry := range result.ToMount {
+			fmt.Printf("[%d/%d] %s\n", i+1, len(result.ToMount), entry.Name)
+
+			if entry.IsMounted {
+				fmt.Printf("  Already mounted at: %s\n\n", entry.MountDirPath)
+				mountSuccess++
+				continue
+			}
+
+			switch entry.Type {
+			case "smb":
+				fmt.Printf("  From: //%s:%d/%s\n", entry.SMB.Addr, entry.SMB.GetPort(), entry.SMB.ShareName)
+			case "sshfs":
+				fmt.Printf("  From: %s:%s\n", entry.SSHFS.Host, entry.SSHFS.RemotePath)
+			case "webdav":
+				fmt.Printf("  From: %s\n", entry.WebDAV.URL)
+			}
+			fmt.Printf("  To: %s\n", entry.MountDirPath)
+
+			if err := mgr.Mount(ctx, entry.Name); err != nil {
+				fmt.Fprintf(os.Stderr, "  Failed: %v\n\n", err)
+				mountFail++
+				continue
+			}
+
+			fmt.Println("  Successfully mounted")
+			mountSuccess++
+			fmt.Println()
+		}
+		fmt.Println("==========================================")
+		fmt.Printf("Mount complete: %d succeeded, %d failed\n", mountSuccess, mountFail)
+		fmt.Println("==========================================")
+	}
+
+	totalSuccess := successCount + mountSuccess
+	totalFail := failCount + mountFail
+	if totalFail > 0 && totalSuccess == 0 {
+		return fmt.Errorf("all operations failed")
 	}
 
 	return nil
