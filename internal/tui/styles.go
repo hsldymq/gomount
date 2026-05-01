@@ -104,16 +104,10 @@ var (
 var (
 	// Status badge
 	StatusBadgeMounted = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("42")). // Green
-				Bold(true).
-				Padding(0, 1).
-				Background(lipgloss.Color("236"))
+				Foreground(lipgloss.Color("42")).
+				Bold(true)
 
-	StatusBadgeUnmounted = lipgloss.NewStyle().
-				Foreground(dimColor).
-				Bold(true).
-				Padding(0, 1).
-				Background(lipgloss.Color("236"))
+	StatusBadgeUnmounted = lipgloss.NewStyle()
 
 	CheckMarkMountedStyle = lipgloss.NewStyle().
 				Foreground(lipgloss.Color("42")).

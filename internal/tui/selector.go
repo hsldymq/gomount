@@ -51,6 +51,7 @@ type SelectorModel struct {
 	Selected    []*config.MountEntry
 	SelectedMap map[int]SelectionState
 	Cancelled   bool
+	Confirmed   bool
 	Height      int
 	Width       int
 	ShowStatus  bool
@@ -93,6 +94,7 @@ func (m SelectorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if !m.NoFallback && len(m.Selected) == 0 && len(m.Mounts) > 0 {
 				m.Selected = []*config.MountEntry{&m.Mounts[m.Cursor]}
 			}
+			m.Confirmed = true
 			return m, tea.Quit
 
 		case " ":
@@ -169,7 +171,7 @@ func (m *SelectorModel) adjustScroll() {
 
 // View 渲染选择器模型
 func (m SelectorModel) View() string {
-	if m.Cancelled || len(m.Selected) > 0 {
+	if m.Cancelled || m.Confirmed {
 		return ""
 	}
 

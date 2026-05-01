@@ -23,8 +23,10 @@ var (
 )
 
 var rootCmd = &cobra.Command{
-	Use:   "gomount",
-	Short: "便捷的 SMB/CIFS 挂载管理工具",
+	Use:           "gomount",
+	Short:         "便捷的 SMB/CIFS 挂载管理工具",
+	SilenceUsage:  true,
+	SilenceErrors: true,
 	Long: `gomount 是一个用于管理 Linux 系统 SMB/CIFS 共享的 CLI 工具。
 它提供了挂载和卸载 SMB 共享的交互界面，
 可配置选项存储在 YAML 文件中。`,
@@ -43,23 +45,30 @@ var listCmd = &cobra.Command{
 }
 
 var mountCmd = &cobra.Command{
-	Use:     "mount [name]",
+	Use:     "mount [name...]",
 	Aliases: []string{"m"},
-	Short:   "挂载 SMB 共享",
-	Long: `挂载 SMB 共享。如果提供了名称，则挂载该特定共享。
-如果未提供名称，则显示交互式选择菜单。`,
-	Args: cobra.MaximumNArgs(1),
-	RunE: runMount,
+	Short:   "挂载指定共享",
+	Long:    `挂载指定名称的共享。可指定多个名称依次挂载。`,
+	Args:    cobra.MinimumNArgs(0),
+	RunE:    runMount,
 }
 
 var umountCmd = &cobra.Command{
-	Use:     "umount [name]",
+	Use:     "umount [name...]",
 	Aliases: []string{"u"},
-	Short:   "卸载 SMB 共享",
-	Long: `卸载 SMB 共享。如果提供了名称，则卸载该特定共享。
-如果未提供名称，则显示已挂载共享的交互式选择菜单。`,
-	Args: cobra.MaximumNArgs(1),
-	RunE: runUmount,
+	Short:   "卸载指定共享",
+	Long:    `卸载指定名称的已挂载共享。可指定多个名称依次卸载。`,
+	Args:    cobra.MinimumNArgs(0),
+	RunE:    runUmount,
+}
+
+var menuCmd = &cobra.Command{
+	Use:     "menu",
+	Aliases: []string{"i"},
+	Short:   "交互式挂载管理",
+	Long: `显示交互式选择菜单，可以选择要挂载或卸载的共享。
+这是默认的交互式操作模式。`,
+	RunE: runMenu,
 }
 
 var configExampleCmd = &cobra.Command{
@@ -79,6 +88,7 @@ func init() {
 	rootCmd.PersistentFlags().StringVarP(&configPath, "config", "c", "",
 		fmt.Sprintf("配置文件路径 (默认: %s)", config.DefaultConfigPath()))
 
+	rootCmd.AddCommand(menuCmd)
 	rootCmd.AddCommand(listCmd)
 	rootCmd.AddCommand(mountCmd)
 	rootCmd.AddCommand(umountCmd)
@@ -125,11 +135,6 @@ func loadConfig() (*config.Config, error) {
 		return nil, fmt.Errorf("failed to load config: %w", err)
 	}
 
-	warnings, _ := config.CheckConfigPermissions(path)
-	for _, w := range warnings {
-		fmt.Fprintf(os.Stderr, "Warning: %s\n", w)
-	}
-
 	return cfg, nil
 }
 
@@ -158,31 +163,11 @@ func runList(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func runMount(cmd *cobra.Command, args []string) error {
-	cfg, err := loadConfig()
-	if err != nil {
-		return err
+func mountEntries(ctx context.Context, mgr *drivers.Manager, entries []*config.MountEntry) (success, fail int) {
+	if len(entries) == 0 {
+		return 0, 0
 	}
 
-	mgr := createDriverManager(cfg)
-	ctx := context.Background()
-
-	if err := mgr.RefreshAllStatus(ctx); err != nil {
-		fmt.Fprintf(os.Stderr, "Warning: failed to refresh mount status: %v\n", err)
-	}
-
-	if len(args) == 0 {
-		return runMountInteractive(cfg, mgr, ctx)
-	}
-
-	name := args[0]
-	entry, found := cfg.FindByName(name)
-	if !found {
-		return fmt.Errorf("mount entry '%s' not found", name)
-	}
-	entries := []*config.MountEntry{entry}
-
-	var successCount, failCount int
 	fmt.Printf("Mounting %d share(s)...\n\n", len(entries))
 
 	if err := interaction.EnsureSudoCached(); err != nil {
@@ -194,7 +179,7 @@ func runMount(cmd *cobra.Command, args []string) error {
 
 		if entry.IsMounted {
 			fmt.Printf("  Already mounted at: %s\n\n", entry.MountDirPath)
-			successCount++
+			success++
 			continue
 		}
 
@@ -210,113 +195,84 @@ func runMount(cmd *cobra.Command, args []string) error {
 
 		if err := mgr.Mount(ctx, entry.Name); err != nil {
 			fmt.Fprintf(os.Stderr, "  Failed: %v\n\n", err)
-			failCount++
+			fail++
 			continue
 		}
 
 		fmt.Println("  Successfully mounted")
-		successCount++
+		success++
 		fmt.Println()
 	}
 
-	fmt.Println("==========================================")
-	fmt.Printf("Mount complete: %d succeeded, %d failed\n", successCount, failCount)
-	fmt.Println("==========================================")
-
-	if failCount > 0 && successCount == 0 {
-		return fmt.Errorf("%d mount(s) failed", failCount)
-	}
-
-	return nil
+	return
 }
 
-func runMountInteractive(cfg *config.Config, mgr *drivers.Manager, ctx context.Context) error {
-	result := tui.SelectMountAction(cfg.Mounts)
-	if result.Cancelled {
-		fmt.Println("Cancelled")
-		return nil
-	}
-	if len(result.ToMount) == 0 && len(result.ToUnmount) == 0 {
-		return nil
+func unmountEntries(ctx context.Context, mgr *drivers.Manager, entries []*config.MountEntry) (success, fail int) {
+	if len(entries) == 0 {
+		return 0, 0
 	}
 
-	var successCount, failCount int
-	sudoCached := false
+	fmt.Printf("Unmounting %d share(s)...\n\n", len(entries))
 
-	if len(result.ToUnmount) > 0 {
-		fmt.Printf("Unmounting %d share(s)...\n\n", len(result.ToUnmount))
-		if err := interaction.EnsureSudoCached(); err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: sudo authentication failed: %v\n", err)
+	if err := interaction.EnsureSudoCached(); err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: sudo authentication failed: %v\n", err)
+	}
+
+	for i, entry := range entries {
+		fmt.Printf("[%d/%d] %s\n", i+1, len(entries), entry.Name)
+
+		if !entry.IsMounted {
+			fmt.Printf("  Already unmounted\n\n")
+			success++
+			continue
 		}
-		sudoCached = true
 
-		for i, entry := range result.ToUnmount {
-			fmt.Printf("[%d/%d] %s\n", i+1, len(result.ToUnmount), entry.Name)
-			fmt.Printf("  From: %s\n", entry.MountDirPath)
+		fmt.Printf("  From: %s\n", entry.MountDirPath)
 
-			if err := mgr.Unmount(ctx, entry.Name); err != nil {
-				fmt.Fprintf(os.Stderr, "  Failed: %v\n\n", err)
-				failCount++
-				continue
-			}
-
-			fmt.Println("  Successfully unmounted")
-			successCount++
-			fmt.Println()
+		if err := mgr.Unmount(ctx, entry.Name); err != nil {
+			fmt.Fprintf(os.Stderr, "  Failed: %v\n\n", err)
+			fail++
+			continue
 		}
-		fmt.Println("==========================================")
-		fmt.Printf("Unmount complete: %d succeeded, %d failed\n", successCount, failCount)
-		fmt.Println("==========================================")
+
+		fmt.Println("  Successfully unmounted")
+		success++
 		fmt.Println()
 	}
 
-	mountSuccess, mountFail := 0, 0
-	if len(result.ToMount) > 0 {
-		fmt.Printf("Mounting %d share(s)...\n\n", len(result.ToMount))
-		if !sudoCached {
-			if err := interaction.EnsureSudoCached(); err != nil {
-				fmt.Fprintf(os.Stderr, "Warning: sudo authentication failed: %v\n", err)
-			}
-		}
+	return
+}
 
-		for i, entry := range result.ToMount {
-			fmt.Printf("[%d/%d] %s\n", i+1, len(result.ToMount), entry.Name)
-
-			if entry.IsMounted {
-				fmt.Printf("  Already mounted at: %s\n\n", entry.MountDirPath)
-				mountSuccess++
-				continue
-			}
-
-			switch entry.Type {
-			case "smb":
-				fmt.Printf("  From: //%s:%d/%s\n", entry.SMB.Addr, entry.SMB.GetPort(), entry.SMB.ShareName)
-			case "sshfs":
-				fmt.Printf("  From: %s:%s\n", entry.SSHFS.Host, entry.SSHFS.RemotePath)
-			case "webdav":
-				fmt.Printf("  From: %s\n", entry.WebDAV.URL)
-			}
-			fmt.Printf("  To: %s\n", entry.MountDirPath)
-
-			if err := mgr.Mount(ctx, entry.Name); err != nil {
-				fmt.Fprintf(os.Stderr, "  Failed: %v\n\n", err)
-				mountFail++
-				continue
-			}
-
-			fmt.Println("  Successfully mounted")
-			mountSuccess++
-			fmt.Println()
-		}
-		fmt.Println("==========================================")
-		fmt.Printf("Mount complete: %d succeeded, %d failed\n", mountSuccess, mountFail)
-		fmt.Println("==========================================")
+func runMount(cmd *cobra.Command, args []string) error {
+	cfg, err := loadConfig()
+	if err != nil {
+		return err
 	}
 
-	totalSuccess := successCount + mountSuccess
-	totalFail := failCount + mountFail
-	if totalFail > 0 && totalSuccess == 0 {
-		return fmt.Errorf("all operations failed")
+	mgr := createDriverManager(cfg)
+	ctx := context.Background()
+
+	if err := mgr.RefreshAllStatus(ctx); err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: failed to refresh mount status: %v\n", err)
+	}
+
+	if len(args) == 0 {
+		fmt.Fprintln(os.Stderr, "No mount entry specified. Use 'gomount menu' for interactive selection.")
+		return nil
+	}
+
+	var entries []*config.MountEntry
+	for _, name := range args {
+		entry, found := cfg.FindByName(name)
+		if !found {
+			return fmt.Errorf("mount entry '%s' not found", name)
+		}
+		entries = append(entries, entry)
+	}
+
+	success, fail := mountEntries(ctx, mgr, entries)
+	if fail > 0 && success == 0 {
+		return fmt.Errorf("%d mount(s) failed", fail)
 	}
 
 	return nil
@@ -335,60 +291,57 @@ func runUmount(cmd *cobra.Command, args []string) error {
 		fmt.Fprintf(os.Stderr, "Warning: failed to refresh mount status: %v\n", err)
 	}
 
-	var entries []*config.MountEntry
-
 	if len(args) == 0 {
-		selected, cancelled := tui.SelectUnmountEntry(cfg.Mounts)
-		if cancelled {
-			fmt.Println("Cancelled")
-			return nil
-		}
-		if selected == nil || len(selected) == 0 {
-			fmt.Println("No mounted shares available")
-			return nil
-		}
-		entries = selected
-	} else {
-		name := args[0]
+		fmt.Fprintln(os.Stderr, "No mount entry specified. Use 'gomount menu' for interactive selection.")
+		return nil
+	}
+
+	var entries []*config.MountEntry
+	for _, name := range args {
 		entry, found := cfg.FindByName(name)
 		if !found {
 			return fmt.Errorf("mount entry '%s' not found", name)
 		}
-
-		if !entry.IsMounted {
-			return fmt.Errorf("not mounted: %s", entry.Name)
-		}
-		entries = []*config.MountEntry{entry}
+		entries = append(entries, entry)
 	}
 
-	var successCount, failCount int
-	fmt.Printf("Unmounting %d share(s)...\n\n", len(entries))
-
-	if err := interaction.EnsureSudoCached(); err != nil {
-		fmt.Fprintf(os.Stderr, "Warning: sudo authentication failed: %v\n", err)
+	success, fail := unmountEntries(ctx, mgr, entries)
+	if fail > 0 && success == 0 {
+		return fmt.Errorf("%d unmount(s) failed", fail)
 	}
 
-	for i, entry := range entries {
-		fmt.Printf("[%d/%d] %s\n", i+1, len(entries), entry.Name)
-		fmt.Printf("  From: %s\n", entry.MountDirPath)
+	return nil
+}
 
-		if err := mgr.Unmount(ctx, entry.Name); err != nil {
-			fmt.Fprintf(os.Stderr, "  Failed: %v\n\n", err)
-			failCount++
-			continue
-		}
-
-		fmt.Println("  Successfully unmounted")
-		successCount++
-		fmt.Println()
+func runMenu(cmd *cobra.Command, args []string) error {
+	cfg, err := loadConfig()
+	if err != nil {
+		return err
 	}
 
-	fmt.Println("==========================================")
-	fmt.Printf("Unmount complete: %d succeeded, %d failed\n", successCount, failCount)
-	fmt.Println("==========================================")
+	mgr := createDriverManager(cfg)
+	ctx := context.Background()
 
-	if failCount > 0 && successCount == 0 {
-		return fmt.Errorf("%d unmount(s) failed", failCount)
+	if err := mgr.RefreshAllStatus(ctx); err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: failed to refresh mount status: %v\n", err)
+	}
+
+	result := tui.SelectMountAction(cfg.Mounts)
+	if result.Cancelled {
+		fmt.Println("Cancelled")
+		return nil
+	}
+	if len(result.ToMount) == 0 && len(result.ToUnmount) == 0 {
+		return nil
+	}
+
+	uSuccess, uFail := unmountEntries(ctx, mgr, result.ToUnmount)
+	mSuccess, mFail := mountEntries(ctx, mgr, result.ToMount)
+
+	totalSuccess := uSuccess + mSuccess
+	totalFail := uFail + mFail
+	if totalFail > 0 && totalSuccess == 0 {
+		return fmt.Errorf("all operations failed")
 	}
 
 	return nil
