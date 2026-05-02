@@ -180,14 +180,12 @@ func (m SelectorModel) View() string {
 	// 标题
 	if m.Title != "" {
 		b.WriteString(TitleStyle.Render(m.Title))
-		b.WriteString("\n\n")
+		b.WriteString("\n")
 	}
 
-	// 构建条目
 	b.WriteString(m.renderItems())
 
-	// 帮助文本
-	b.WriteString("\n\n")
+	b.WriteString("\n")
 	b.WriteString(HelpStyle.Render("↑/k: up | ↓/j: down | space: select | enter: confirm | q/esc: cancel"))
 
 	return b.String()

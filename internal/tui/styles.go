@@ -28,7 +28,6 @@ var (
 	TitleStyle = lipgloss.NewStyle().
 			Bold(true).
 			Foreground(titleColor).
-			MarginTop(1).
 			MarginBottom(1)
 
 	// Subtitle style
@@ -84,7 +83,7 @@ var (
 			Bold(true)
 
 	CursorArrowStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("135")).
+				Foreground(titleColor).
 				Bold(true)
 
 	// Dimmed text
