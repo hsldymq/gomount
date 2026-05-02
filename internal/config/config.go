@@ -15,13 +15,25 @@ func init() {
 	validate = validator.New()
 }
 
-// Load 从指定路径加载配置
-// 如果路径为空，则使用默认路径
-func Load(path string) (*Config, error) {
+// DefaultConfigPath 返回默认配置文件路径
+func DefaultConfigPath() string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	return filepath.Join(home, ".config", "gomount.yaml")
+}
+
+// LoadConfig 从指定路径或默认路径载入配置
+func LoadConfig(path string) (*Config, error) {
 	if path == "" {
 		path = DefaultConfigPath()
 	}
+	return doLoad(path)
+}
 
+// doLoad 从指定路径加载配置
+func doLoad(path string) (*Config, error) {
 	// Check if file exists
 	if _, err := os.Stat(path); os.IsNotExist(err) {
 		return nil, &ConfigError{Path: path, Err: fmt.Errorf("config file not found")}
@@ -162,15 +174,6 @@ func CheckConfigPermissions(path string) ([]string, []error) {
 	}
 
 	return warnings, errors
-}
-
-// DefaultConfigPath 返回默认配置文件路径
-func DefaultConfigPath() string {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return ""
-	}
-	return filepath.Join(home, ".config", "gomount_config.yaml")
 }
 
 // ConfigError 配置加载或验证错误

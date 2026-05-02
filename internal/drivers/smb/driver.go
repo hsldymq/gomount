@@ -128,12 +128,12 @@ func (d *Driver) Unmount(ctx context.Context, entry *config.MountEntry) error {
 		}
 	}
 
-	if err := interaction.RunCommand(cmd); err != nil {
+	if err := interaction.RunCommandSilent(cmd); err != nil {
 		return &drivers.DriverError{
 			Driver: d.Type(),
 			Op:     "unmount",
 			Entry:  entry.Name,
-			Err:    fmt.Errorf("umount failed: %w", err),
+			Err:    err,
 		}
 	}
 
