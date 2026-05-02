@@ -250,6 +250,11 @@ func entrySegments(entry config.MountEntry) []lineSegment {
 		addrInfo = entry.WebDAV.URL
 	}
 
+	typeLabel := fmt.Sprintf("(%s)", entry.Type)
+	if entry.SSHTunnel != nil {
+		typeLabel = fmt.Sprintf("(%s, tunnel: %s)", entry.Type, entry.SSHTunnel.Host)
+	}
+
 	segments = append(segments,
 		lineSegment{Text: entry.Name},
 		lineSegment{Text: " ", Style: lipgloss.NewStyle()},
@@ -257,7 +262,7 @@ func entrySegments(entry config.MountEntry) []lineSegment {
 		lineSegment{Text: " ", Style: lipgloss.NewStyle()},
 		lineSegment{Text: addrInfo},
 		lineSegment{Text: " ", Style: lipgloss.NewStyle()},
-		lineSegment{Text: fmt.Sprintf("(%s)", entry.Type)},
+		lineSegment{Text: typeLabel},
 	)
 
 	return segments
