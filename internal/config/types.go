@@ -1,10 +1,33 @@
 package config
 
-import "fmt"
+import (
+	"fmt"
 
-// Config 主配置结构
+	"go.yaml.in/yaml/v3"
+)
+
+type StringOrSlice []string
+
+func (s *StringOrSlice) UnmarshalYAML(value *yaml.Node) error {
+	if value.Kind == yaml.ScalarNode {
+		*s = []string{value.Value}
+		return nil
+	}
+	if value.Kind == yaml.SequenceNode {
+		var items []string
+		if err := value.Decode(&items); err != nil {
+			return err
+		}
+		*s = items
+		return nil
+	}
+	return fmt.Errorf("sorting.by must be a string or list of strings")
+}
+
 type Config struct {
-	Mounts []MountEntry `yaml:"mounts" mapstructure:"mounts" validate:"required,min=1"`
+	Mounts  []MountEntry   `yaml:"mounts" mapstructure:"mounts"`
+	Include []string       `yaml:"include,omitempty" mapstructure:"include"`
+	Sorting *SortingConfig `yaml:"sorting,omitempty" mapstructure:"sorting"`
 }
 
 // MountEntry 单个挂载配置（支持多种协议）
@@ -26,7 +49,7 @@ type MountEntry struct {
 // SMBConfig SMB/CIFS配置
 type SMBConfig struct {
 	Addr      string `yaml:"addr" mapstructure:"addr" validate:"required"`
-	Port      int    `yaml:"port,omitempty" mapstructure:"port" validate:"min=1,max=65535"`
+	Port      int    `yaml:"port,omitempty" mapstructure:"port" validate:"omitempty,min=1,max=65535"`
 	ShareName string `yaml:"share_name" mapstructure:"share_name" validate:"required"`
 	Username  string `yaml:"username" mapstructure:"username" validate:"required"`
 	Password  string `yaml:"password,omitempty" mapstructure:"password"`
@@ -47,6 +70,10 @@ type WebDAVConfig struct {
 
 type SSHTunnelConfig struct {
 	Host string `yaml:"host" mapstructure:"host" validate:"required"`
+}
+
+type SortingConfig struct {
+	By StringOrSlice `yaml:"by" mapstructure:"by"`
 }
 
 func (m *MountEntry) GetMountPath() string {

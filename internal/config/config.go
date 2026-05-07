@@ -4,9 +4,10 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 
 	"github.com/go-playground/validator/v10"
-	"github.com/spf13/viper"
+	"go.yaml.in/yaml/v3"
 )
 
 var validate *validator.Validate
@@ -32,59 +33,187 @@ func LoadConfig(path string) (*Config, error) {
 	return doLoad(path)
 }
 
-// doLoad 从指定路径加载配置
 func doLoad(path string) (*Config, error) {
-	// Check if file exists
-	if _, err := os.Stat(path); os.IsNotExist(err) {
-		return nil, &ConfigError{Path: path, Err: fmt.Errorf("config file not found")}
+	absPath, err := filepath.Abs(path)
+	if err != nil {
+		return nil, &ConfigError{Path: path, Err: fmt.Errorf("failed to resolve absolute path: %w", err)}
 	}
 
-	// Create new viper instance
-	v := viper.New()
-
-	// Set config path and file
-	v.SetConfigFile(path)
-
-	// Read config file
-	if err := v.ReadInConfig(); err != nil {
-		return nil, &ConfigError{Path: path, Err: fmt.Errorf("failed to read config: %w", err)}
+	cfg, err := loadRecursive(absPath, make(map[string]bool))
+	if err != nil {
+		return nil, err
 	}
 
-	// Unmarshal config
-	cfg := &Config{}
-	if err := v.Unmarshal(cfg); err != nil {
-		return nil, &ConfigError{Path: path, Err: fmt.Errorf("failed to parse config: %w", err)}
+	if cfg.Sorting != nil && len(cfg.Sorting.By) > 0 {
+		cfg.applySorting(cfg.Sorting)
 	}
 
-	// Validate config
-	if err := validate.Struct(cfg); err != nil {
-		return nil, &ConfigError{Path: path, Err: fmt.Errorf("config validation failed: %w", err)}
-	}
-
-	// Validate driver config for each mount entry
 	for i := range cfg.Mounts {
 		if err := cfg.Mounts[i].ValidateDriverConfig(); err != nil {
-			return nil, &ConfigError{Path: path, Err: err}
+			return nil, &ConfigError{Path: absPath, Err: err}
 		}
 	}
 
-	// Normalize mount paths
 	if err := cfg.Normalize(); err != nil {
-		return nil, &ConfigError{Path: path, Err: fmt.Errorf("failed to normalize config: %w", err)}
+		return nil, &ConfigError{Path: absPath, Err: fmt.Errorf("failed to normalize config: %w", err)}
 	}
 
 	return cfg, nil
 }
 
+func loadRecursive(path string, visited map[string]bool) (*Config, error) {
+	var err error
+	path, err = filepath.Abs(path)
+	if err != nil {
+		return nil, &ConfigError{Path: path, Err: fmt.Errorf("failed to resolve absolute path: %w", err)}
+	}
+
+	if visited[path] {
+		return &Config{}, nil
+	}
+	visited[path] = true
+
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		return nil, &ConfigError{Path: path, Err: fmt.Errorf("config file not found")}
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, &ConfigError{Path: path, Err: fmt.Errorf("failed to read config: %w", err)}
+	}
+
+	cfg := &Config{}
+	if err := yaml.Unmarshal(data, cfg); err != nil {
+		return nil, &ConfigError{Path: path, Err: fmt.Errorf("failed to parse config: %w", err)}
+	}
+
+	for i := range cfg.Mounts {
+		if err := validate.Struct(cfg.Mounts[i]); err != nil {
+			return nil, &ConfigError{Path: path, Err: fmt.Errorf("mount entry validation failed: %w", err)}
+		}
+	}
+
+	for _, includePattern := range cfg.Include {
+		files, warn := resolveIncludePaths(includePattern, filepath.Dir(path))
+		if warn != "" {
+			fmt.Fprintln(os.Stderr, warn)
+		}
+		for _, file := range files {
+			included, err := loadRecursive(file, visited)
+			if err != nil {
+				return nil, err
+			}
+			cfg.Mounts = append(cfg.Mounts, included.Mounts...)
+		}
+	}
+
+	cfg.Include = nil
+
+	if err := cfg.checkNameConflicts(); err != nil {
+		return nil, &ConfigError{Path: path, Err: err}
+	}
+
+	return cfg, nil
+}
+
+func resolveIncludePaths(pattern string, baseDir string) ([]string, string) {
+	expanded := pattern
+	if len(expanded) > 0 && expanded[0] == '~' {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return nil, ""
+		}
+		expanded = home + expanded[1:]
+	}
+
+	if !filepath.IsAbs(expanded) {
+		expanded = filepath.Join(baseDir, expanded)
+	}
+
+	matches, err := filepath.Glob(expanded)
+	if err != nil {
+		return nil, ""
+	}
+
+	if len(matches) == 0 {
+		if containsGlobChars(expanded) {
+			return nil, ""
+		}
+		return nil, fmt.Sprintf("WARNING: included file not found: %s", pattern)
+	}
+
+	return matches, ""
+}
+
+func containsGlobChars(path string) bool {
+	for i := 0; i < len(path); i++ {
+		switch path[i] {
+		case '*', '[', '?':
+			return true
+		}
+	}
+	return false
+}
+
+func (c *Config) checkNameConflicts() error {
+	seen := make(map[string]bool)
+	for _, m := range c.Mounts {
+		if seen[m.Name] {
+			return fmt.Errorf("duplicate mount entry name: '%s'", m.Name)
+		}
+		seen[m.Name] = true
+	}
+	return nil
+}
+
+func (c *Config) applySorting(s *SortingConfig) {
+	if len(s.By) == 0 {
+		return
+	}
+
+	sort.SliceStable(c.Mounts, func(i, j int) bool {
+		for _, field := range s.By {
+			desc := false
+			f := field
+			if len(f) > 0 && f[0] == '-' {
+				desc = true
+				f = f[1:]
+			}
+			cmp := compareField(c.Mounts[i], c.Mounts[j], f)
+			if cmp == 0 {
+				continue
+			}
+			if desc {
+				return cmp > 0
+			}
+			return cmp < 0
+		}
+		return false
+	})
+}
+
+func compareField(a, b MountEntry, field string) int {
+	switch field {
+	case "name":
+		if a.Name < b.Name {
+			return -1
+		}
+		if a.Name > b.Name {
+			return 1
+		}
+		return 0
+	default:
+		return 0
+	}
+}
+
 // Normalize 应用默认值并解析路径
 func (c *Config) Normalize() error {
-	// Normalize each mount entry
 	for i := range c.Mounts {
 		if err := c.Mounts[i].Normalize(); err != nil {
 			return err
 		}
 	}
-
 	return nil
 }
 
@@ -92,7 +221,6 @@ func (c *Config) Normalize() error {
 func (m *MountEntry) Normalize() error {
 	mountPath := m.MountDirPath
 
-	// Expand ~ if present
 	if len(mountPath) > 0 && mountPath[0] == '~' {
 		home, err := os.UserHomeDir()
 		if err != nil {
@@ -101,7 +229,6 @@ func (m *MountEntry) Normalize() error {
 		mountPath = home + mountPath[1:]
 	}
 
-	// Convert to absolute path
 	var err error
 	mountPath, err = filepath.Abs(mountPath)
 	if err != nil {
@@ -163,12 +290,10 @@ func CheckConfigPermissions(path string) ([]string, []error) {
 
 	mode := info.Mode()
 
-	// Check if world-readable
 	if mode.Perm()&0004 != 0 {
 		warnings = append(warnings, "Config file is world-readable. Consider chmod 600 for better security.")
 	}
 
-	// Check if group-readable (warn if not owner-only)
 	if mode.Perm()&0040 != 0 {
 		warnings = append(warnings, "Config file is group-readable. For best security, only the owner should read it.")
 	}
