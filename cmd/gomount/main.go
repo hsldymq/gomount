@@ -19,7 +19,7 @@ import (
 )
 
 var (
-	//go:embed config_example.yaml
+	//go:embed config.example.yaml
 	configExample string
 
 	//go:embed usage.tmpl

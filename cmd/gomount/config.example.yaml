@@ -1,0 +1,61 @@
+# gomount 配置文件示例
+# 复制到 ~/.config/gomount.yaml 并根据需要修改
+# 使用: gomount config-example > ~/.config/gomount.yaml
+
+mounts:
+  # SSHFS 挂载
+  # 连接细节（用户名、端口、密钥等）由 ~/.ssh/config 管理, 支持 ProxyJump
+  # - name: dev-server
+  #   type: sshfs
+  #   sshfs:
+  #     host: dev.example.com         # ~/.ssh/config 别名或直接 hostname
+  #     remote_path: /home/user/projects
+  #   mount_dir_path: /mnt/dev
+
+  # SMB/CIFS 挂载
+  # - name: nas
+  #   type: smb
+  #   smb:
+  #     addr: 192.168.1.100           # SMB 服务器地址
+  #     # port: 445                   # 可选，默认 445
+  #     share_name: shared_folder
+  #     username: user
+  #     # password: pass              # 可选，不填则挂载时交互式输入
+  #   mount_dir_path: /mnt/nas
+
+  # 通过 SSH 隧道挂载 SMB（远程内网 SMB，需经跳板机访问）
+  # ssh_tunnel.host 为跳板机地址，使用 ~/.ssh/config 中的别名
+  # - name: remote-nas
+  #   type: smb
+  #   smb:
+  #     addr: 10.0.6.253           # 跳板机可达的内网 SMB 地址
+  #     share_name: data
+  #     username: smbuser
+  #   ssh_tunnel:
+  #     host: bastion.example.com  # 跳板机（走 ~/.ssh/config）
+  #   mount_dir_path: /mnt/remote-nas
+
+  # WebDAV 挂载
+  # - name: cloud
+  #   type: webdav
+  #   webdav:
+  #     url: https://cloud.example.com/remote.php/dav/files/user/
+  #     username: user
+  #     # password: pass
+  #   mount_dir_path: /mnt/cloud
+
+  # 引用其他配置文件 (支持 ~, 相对路径, glob)
+  # include:
+  #   - ~/Sync/gomount.d/*.yaml     # 从同步盘引用
+  #   - ./team-mounts.yaml          # 相对路径（相对于此配置文件所在目录）
+
+  # 排序 (省略则保持声明顺序)
+  # sorting:
+  #   by: name                      # 按名称排序
+  #   # by:                         # 多字段排序
+  #   #   - name                    # 升序
+  #   #   - "-type"                 # 降序（- 前缀）
+
+# 提示:
+#   - mount_dir_path 支持 ~ 展开为用户主目录
+#   - 建议设置配置文件权限: chmod 600 ~/.config/gomount.yaml
