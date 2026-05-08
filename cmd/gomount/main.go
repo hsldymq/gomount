@@ -30,12 +30,11 @@ var (
 
 var rootCmd = &cobra.Command{
 	Use:           "gomount",
-	Short:         "便捷的 SMB/CIFS 挂载管理工具",
+	Short:         "便捷的挂载管理工具",
 	SilenceUsage:  true,
 	SilenceErrors: true,
-	Long: `gomount 是一个用于管理 Linux 系统 SMB/CIFS 共享的 CLI 工具。
-它提供了挂载和卸载 SMB 共享的交互界面，
-可配置选项存储在 YAML 文件中。`,
+	Long: `gomount 是一个管理多种网络共享挂载的 CLI 工具。
+它提供了挂载和卸载网络共享的交互界面。`,
 	Run: func(cmd *cobra.Command, args []string) {
 		_ = cmd.Help()
 	},
@@ -45,8 +44,8 @@ var listCmd = &cobra.Command{
 	Use:     "list",
 	Aliases: []string{"l"},
 	Short:   "列出所有配置的挂载点",
-	Long: `显示所有配置的 SMB 挂载条目及其当前挂载状态。
-显示名称、SMB 地址、挂载路径以及每个共享是否已挂载。`,
+	Long: `显示所有配置的挂载条目及其当前挂载状态。
+显示名称、来源地址、挂载路径以及每个共享是否已挂载。`,
 	RunE: runList,
 }
 
