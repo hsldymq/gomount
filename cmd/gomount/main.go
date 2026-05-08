@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	"strconv"
+
 	"github.com/hsldymq/gomount/internal/config"
 	"github.com/hsldymq/gomount/internal/drivers"
 	smbDriver "github.com/hsldymq/gomount/internal/drivers/smb"
@@ -446,7 +448,7 @@ func checkExistingDir(entry *config.MountEntry, info os.FileInfo, currentUid, cu
 
 func handleMissingDir(entry *config.MountEntry, dryRun bool, currentUid, currentGid int) mkdirResult {
 	if dryRun {
-		return mkdirResult{kind: mkdirResultCreated, entry: entry, needSudo: predictNeedsSudo(entry.MountDirPath, currentUid)}
+		return mkdirResult{kind: mkdirResultCreated, entry: entry, needSudo: predictNeedsSudo(entry.MountDirPath)}
 	}
 
 	if err := interaction.MkdirAll(entry.MountDirPath, 0755); err != nil {
@@ -459,13 +461,13 @@ func handleMissingDir(entry *config.MountEntry, dryRun bool, currentUid, current
 	return mkdirResult{kind: mkdirResultCreated, entry: entry}
 }
 
-func predictNeedsSudo(path string, currentUid int) bool {
+func predictNeedsSudo(path string) bool {
 	_, err := os.Stat(filepath.Dir(path))
 	if err != nil {
 		return true
 	}
-	uid, _, _ := interaction.GetFileOwner(filepath.Dir(path))
-	return uid != currentUid
+	owned, _ := interaction.IsOwnedByCurrentUser(filepath.Dir(path))
+	return !owned
 }
 
 func runMkdir(cmd *cobra.Command, args []string) error {
@@ -496,8 +498,8 @@ func runMkdir(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("failed to get current user: %w", err)
 	}
-	currentUid := atoiSimple(currentUser.Uid)
-	currentGid := atoiSimple(currentUser.Gid)
+	currentUid, _ := strconv.Atoi(currentUser.Uid)
+	currentGid, _ := strconv.Atoi(currentUser.Gid)
 
 	var c mkdirCollector
 	for _, entry := range entries {
@@ -630,15 +632,4 @@ func printMkdirResult(toCreate []mkdirResult, ownerOK []*config.MountEntry) {
 			fmt.Printf(fmtStr+"\n", e.Name+":", e.MountDirPath)
 		}
 	}
-}
-
-func atoiSimple(s string) int {
-	n := 0
-	for _, c := range s {
-		if c < '0' || c > '9' {
-			return 0
-		}
-		n = n*10 + int(c-'0')
-	}
-	return n
 }
