@@ -49,6 +49,15 @@ var listCmd = &cobra.Command{
 	RunE: runList,
 }
 
+var interactiveCmd = &cobra.Command{
+	Use:     "interactive",
+	Aliases: []string{"i"},
+	Short:   "交互式挂载管理",
+	Long: `显示交互式选择菜单，可以选择要挂载或卸载的共享。
+这是默认的交互式操作模式。`,
+	RunE: runInteractive,
+}
+
 var mountCmd = &cobra.Command{
 	Use:     "mount [name...]",
 	Aliases: []string{"m"},
@@ -65,15 +74,6 @@ var umountCmd = &cobra.Command{
 	Long:    `卸载指定名称的已挂载共享。可指定多个名称依次卸载。`,
 	Args:    cobra.MinimumNArgs(0),
 	RunE:    runUmount,
-}
-
-var interactiveCmd = &cobra.Command{
-	Use:     "interactive",
-	Aliases: []string{"i"},
-	Short:   "交互式挂载管理",
-	Long: `显示交互式选择菜单，可以选择要挂载或卸载的共享。
-这是默认的交互式操作模式。`,
-	RunE: runInteractive,
 }
 
 var configExampleCmd = &cobra.Command{
