@@ -28,7 +28,7 @@ func (d *Driver) Type() string {
 }
 
 func (d *Driver) NeedsSudo() bool {
-	return daemon.IsCommandAvailable("mount.cifs")
+	return false // Daemon runs as root, no sudo needed
 }
 
 func (d *Driver) Mount(ctx context.Context, entry *config.MountEntry) error {
@@ -84,9 +84,10 @@ func (d *Driver) mountCIFS(ctx context.Context, entry *config.MountEntry) error 
 	}
 	defer os.Remove(credsFile)
 
-	cmd := d.buildMountCommand(entry, credsFile, smbAddr, smbPort)
+	cmd := d.buildMountCommand(ctx, entry, credsFile, smbAddr, smbPort)
 
-	// Directly execute - daemon is root, no sudo needed
+	// Directly execute mount.cifs - the daemon process runs with root privileges,
+	// so we can execute system mount commands directly without sudo
 	if err := interaction.RunCommand(cmd); err != nil {
 		if entry.SSHTunnel != nil {
 			sshtunnel.Teardown(entry.Name)
@@ -147,7 +148,7 @@ func (d *Driver) Unmount(ctx context.Context, entry *config.MountEntry) error {
 		if err := interaction.RunCommandSilent(cmd); err != nil {
 			return &drivers.DriverError{
 				Driver: d.Type(), Op: "unmount", Entry: entry.Name,
-				Err: err,
+				Err: &drivers.CommandError{Cmd: "umount", Err: err},
 			}
 		}
 	}
@@ -228,7 +229,7 @@ func (d *Driver) createCredentialFile(entry *config.MountEntry) (string, error) 
 	return tmpFile.Name(), nil
 }
 
-func (d *Driver) buildMountCommand(entry *config.MountEntry, credsFile, addr string, port int) *exec.Cmd {
+func (d *Driver) buildMountCommand(ctx context.Context, entry *config.MountEntry, credsFile, addr string, port int) *exec.Cmd {
 	smbAddr := fmt.Sprintf("//%s/%s", addr, entry.SMB.ShareName)
 
 	options := fmt.Sprintf("credentials=%s,port=%d,file_mode=0755,dir_mode=0755,uid=%d,gid=%d",
@@ -244,5 +245,5 @@ func (d *Driver) buildMountCommand(entry *config.MountEntry, credsFile, addr str
 		"-o", options,
 	}
 
-	return exec.Command("mount.cifs", args...)
+	return exec.CommandContext(ctx, "mount.cifs", args...)
 }
