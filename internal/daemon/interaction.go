@@ -36,24 +36,29 @@ func (m *InteractionManager) Register(id string) chan *InteractionResponsePayloa
 // Returns true if the response was handled (i.e., a pending request was found).
 func (m *InteractionManager) HandleResponse(id string, payload *InteractionResponsePayload) bool {
 	m.mu.Lock()
-	defer m.mu.Unlock()
+	ch, exists := m.pending[id]
+	if exists {
+		delete(m.pending, id)
+	}
+	m.mu.Unlock()
 
-	ch, ok := m.pending[id]
-	if !ok {
+	if !exists {
 		return false
 	}
 
-	delete(m.pending, id)
-	ch <- payload
-	close(ch)
-	return true
+	select {
+	case ch <- payload:
+		return true
+	default:
+		return false
+	}
 }
 
 // RequestInput sends an interaction request to the client and waits for a response.
 func (im *InteractionManager) RequestInput(client *ClientConn, prompt string, inputType string, mask bool) (string, error) {
 	id := generateClientID()
-
 	ch := make(chan *InteractionResponsePayload, 1)
+
 	im.mu.Lock()
 	im.pending[id] = ch
 	im.mu.Unlock()
@@ -62,6 +67,11 @@ func (im *InteractionManager) RequestInput(client *ClientConn, prompt string, in
 		im.mu.Lock()
 		delete(im.pending, id)
 		im.mu.Unlock()
+		// Drain the channel to prevent goroutine leak
+		select {
+		case <-ch:
+		default:
+		}
 	}()
 
 	// Send interaction request to client
@@ -69,16 +79,23 @@ func (im *InteractionManager) RequestInput(client *ClientConn, prompt string, in
 		Type: MsgTypeInteraction,
 		ID:   id,
 	}
-	payload, _ := json.Marshal(InteractionPayload{
+	payload, err := json.Marshal(InteractionPayload{
 		Prompt:    prompt,
 		InputType: inputType,
 		Mask:      mask,
 	})
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal interaction payload: %w", err)
+	}
 	msg.Payload = payload
 
 	client.mu.Lock()
-	data, _ := json.Marshal(msg)
-	err := client.Conn.WriteMessage(websocket.TextMessage, data)
+	data, err := json.Marshal(msg)
+	if err != nil {
+		client.mu.Unlock()
+		return "", fmt.Errorf("failed to marshal message: %w", err)
+	}
+	err = client.Conn.WriteMessage(websocket.TextMessage, data)
 	client.mu.Unlock()
 
 	if err != nil {

@@ -13,8 +13,12 @@ import (
 
 var upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool {
-		return true // Only localhost connections
+		// Only allow localhost
+		host := r.Host
+		return host == "127.0.0.1:13579" || host == "localhost:13579"
 	},
+	ReadBufferSize:  1024,
+	WriteBufferSize: 1024,
 }
 
 type WebSocketServer struct {
@@ -22,6 +26,7 @@ type WebSocketServer struct {
 	clients        map[string]*ClientConn
 	mu             sync.RWMutex
 	interactionMgr *InteractionManager
+	sem            chan struct{} // semaphore
 }
 
 type ClientConn struct {
@@ -35,6 +40,7 @@ func NewWebSocketServer(handlers *Handlers) *WebSocketServer {
 		handlers:       handlers,
 		clients:        make(map[string]*ClientConn),
 		interactionMgr: NewInteractionManager(),
+		sem:            make(chan struct{}, 100),
 	}
 }
 
@@ -64,6 +70,7 @@ func (s *WebSocketServer) HandleWebSocket(w http.ResponseWriter, r *http.Request
 }
 
 func (s *WebSocketServer) handleConnection(client *ClientConn) {
+	client.Conn.SetReadLimit(1024 * 1024) // 1MB limit
 	for {
 		_, data, err := client.Conn.ReadMessage()
 		if err != nil {
@@ -76,7 +83,11 @@ func (s *WebSocketServer) handleConnection(client *ClientConn) {
 			continue
 		}
 
-		go s.handleMessage(client, &msg)
+		s.sem <- struct{}{}
+		go func(m Message) {
+			defer func() { <-s.sem }()
+			s.handleMessage(client, &m)
+		}(msg)
 	}
 }
 
@@ -96,20 +107,35 @@ func (s *WebSocketServer) sendError(client *ClientConn, id string, errMsg string
 		Type: MsgTypeError,
 		ID:   id,
 	}
-	payload, _ := json.Marshal(ResultPayload{
+	payload, err := json.Marshal(ResultPayload{
 		Status: "error",
 		Error:  errMsg,
 	})
-	msg.Payload = payload
-	s.sendMessage(client, msg)
+	if err != nil {
+		// Log error but still try to send without payload
+		msg.Payload = nil
+	} else {
+		msg.Payload = payload
+	}
+	if err := s.sendMessage(client, msg); err != nil {
+		// Log error
+		_ = err
+	}
 }
 
-func (s *WebSocketServer) sendMessage(client *ClientConn, msg *Message) {
+func (s *WebSocketServer) sendMessage(client *ClientConn, msg *Message) error {
 	client.mu.Lock()
 	defer client.mu.Unlock()
 
-	data, _ := json.Marshal(msg)
-	client.Conn.WriteMessage(websocket.TextMessage, data)
+	data, err := json.Marshal(msg)
+	if err != nil {
+		return fmt.Errorf("failed to marshal message: %w", err)
+	}
+
+	if err := client.Conn.WriteMessage(websocket.TextMessage, data); err != nil {
+		return fmt.Errorf("failed to write message: %w", err)
+	}
+	return nil
 }
 
 func generateClientID() string {
@@ -168,16 +194,23 @@ func (s *WebSocketServer) handleMount(ctx context.Context, client *ClientConn, m
 		}
 	}
 
-	resultPayload, _ := json.Marshal(ResultPayload{
+	resultPayload, err := json.Marshal(ResultPayload{
 		Status:  status,
 		Message: fmt.Sprintf("Mount results: %v", results),
 	})
+	if err != nil {
+		s.sendError(client, msgID, "failed to marshal result")
+		return
+	}
 
-	s.sendMessage(client, &Message{
+	if err := s.sendMessage(client, &Message{
 		Type:    MsgTypeResult,
 		ID:      msgID,
 		Payload: resultPayload,
-	})
+	}); err != nil {
+		// Log error
+		_ = err
+	}
 }
 
 func (s *WebSocketServer) handleUnmount(ctx context.Context, client *ClientConn, msgID string, payload CommandPayload) {
@@ -204,31 +237,45 @@ func (s *WebSocketServer) handleUnmount(ctx context.Context, client *ClientConn,
 		}
 	}
 
-	resultPayload, _ := json.Marshal(ResultPayload{
+	resultPayload, err := json.Marshal(ResultPayload{
 		Status:  status,
 		Message: fmt.Sprintf("Unmount results: %v", results),
 	})
+	if err != nil {
+		s.sendError(client, msgID, "failed to marshal result")
+		return
+	}
 
-	s.sendMessage(client, &Message{
+	if err := s.sendMessage(client, &Message{
 		Type:    MsgTypeResult,
 		ID:      msgID,
 		Payload: resultPayload,
-	})
+	}); err != nil {
+		// Log error
+		_ = err
+	}
 }
 
 func (s *WebSocketServer) handleList(ctx context.Context, client *ClientConn, msgID string) {
 	entries := s.handlers.List()
 
-	resultPayload, _ := json.Marshal(ResultPayload{
+	resultPayload, err := json.Marshal(ResultPayload{
 		Status: "success",
 		Data:   entries,
 	})
+	if err != nil {
+		s.sendError(client, msgID, "failed to marshal result")
+		return
+	}
 
-	s.sendMessage(client, &Message{
+	if err := s.sendMessage(client, &Message{
 		Type:    MsgTypeResult,
 		ID:      msgID,
 		Payload: resultPayload,
-	})
+	}); err != nil {
+		// Log error
+		_ = err
+	}
 }
 
 func (s *WebSocketServer) handleStatus(ctx context.Context, client *ClientConn, msgID string, payload CommandPayload) {
@@ -244,32 +291,46 @@ func (s *WebSocketServer) handleStatus(ctx context.Context, client *ClientConn, 
 		return
 	}
 
-	resultPayload, _ := json.Marshal(ResultPayload{
+	resultPayload, err := json.Marshal(ResultPayload{
 		Status:  "success",
 		Message: status.Message,
 		Data:    status,
 	})
+	if err != nil {
+		s.sendError(client, msgID, "failed to marshal result")
+		return
+	}
 
-	s.sendMessage(client, &Message{
+	if err := s.sendMessage(client, &Message{
 		Type:    MsgTypeResult,
 		ID:      msgID,
 		Payload: resultPayload,
-	})
+	}); err != nil {
+		// Log error
+		_ = err
+	}
 }
 
 func (s *WebSocketServer) handleStop(ctx context.Context, client *ClientConn, msgID string) {
 	s.handlers.UnmountAll()
 
-	resultPayload, _ := json.Marshal(ResultPayload{
+	resultPayload, err := json.Marshal(ResultPayload{
 		Status:  "success",
 		Message: "daemon stopping",
 	})
+	if err != nil {
+		s.sendError(client, msgID, "failed to marshal result")
+		return
+	}
 
-	s.sendMessage(client, &Message{
+	if err := s.sendMessage(client, &Message{
 		Type:    MsgTypeResult,
 		ID:      msgID,
 		Payload: resultPayload,
-	})
+	}); err != nil {
+		// Log error
+		_ = err
+	}
 
 	// Trigger shutdown
 	go s.handlers.Shutdown()
