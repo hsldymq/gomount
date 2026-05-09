@@ -7,6 +7,8 @@ import (
 	"os/user"
 	"strconv"
 	"syscall"
+
+	"github.com/hsldymq/gomount/internal/config"
 )
 
 // IsRoot checks if current process is running as root
@@ -57,10 +59,13 @@ func GetOriginalGID() int {
 }
 
 // NeedsPrivilege checks if config requires root privileges
-func NeedsPrivilege(cfg interface{}) bool {
-	// This is a simplified check - in reality you'd check the config
-	// For now, return true if SMB mounts exist
-	return true
+func NeedsPrivilege(cfg *config.Config) bool {
+	for _, entry := range cfg.Mounts {
+		if entry.Type == "smb" {
+			return true
+		}
+	}
+	return false
 }
 
 // StartWithSudo starts the current executable with sudo
@@ -75,6 +80,7 @@ func StartWithSudo(args ...string) error {
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
+	cmd.Env = os.Environ() // Preserve environment
 
 	return cmd.Run()
 }
@@ -100,8 +106,8 @@ func DropPrivileges() error {
 
 // RunAsUser runs a function as the specified user
 func RunAsUser(uid, gid int, fn func() error) error {
-	if uid == 0 {
-		return fn() // No need to switch
+	if uid == 0 || (uid == os.Getuid() && gid == os.Getgid()) {
+		return fn()
 	}
 
 	// Save current permissions
@@ -110,20 +116,20 @@ func RunAsUser(uid, gid int, fn func() error) error {
 
 	// Switch to target user
 	if err := syscall.Setgid(gid); err != nil {
-		return err
+		return fmt.Errorf("failed to set gid %d: %w", gid, err)
 	}
 	if err := syscall.Setuid(uid); err != nil {
 		// Try to restore gid on failure
 		syscall.Setgid(oldGID)
-		return err
+		return fmt.Errorf("failed to set uid %d: %w", uid, err)
 	}
 
+	// Ensure restoration happens even if fn panics
+	defer func() {
+		syscall.Setuid(oldUID)
+		syscall.Setgid(oldGID)
+	}()
+
 	// Run function
-	err := fn()
-
-	// Restore permissions
-	syscall.Setuid(oldUID)
-	syscall.Setgid(oldGID)
-
-	return err
+	return fn()
 }
