@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"os/user"
 	"path/filepath"
 	"strconv"
 	"syscall"
@@ -145,6 +146,15 @@ func StartDaemon(configPath string, cfg DaemonConfig) error {
 		DaemonEnvKey+"="+DaemonEnvValue,
 		"GOMOUNT_DAEMON_PORT="+strconv.Itoa(port),
 	)
+
+	// Add original user info
+	if currentUser, err := user.Current(); err == nil {
+		env = append(env,
+			"GOMOUNT_ORIGINAL_UID="+currentUser.Uid,
+			"GOMOUNT_ORIGINAL_GID="+currentUser.Gid,
+			"GOMOUNT_ORIGINAL_USERNAME="+currentUser.Username,
+		)
+	}
 
 	null, err := os.Open(os.DevNull)
 	if err != nil {

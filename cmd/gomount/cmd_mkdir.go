@@ -15,7 +15,7 @@ var mkdirDryRun bool
 
 var mkdirCmd = &cobra.Command{
 	Use:     "mkdir [name...]",
-	Aliases: []string{"d"},
+	Aliases: []string{"c"},
 	Short:   "创建挂载目录",
 	Long: `根据配置文件创建所有挂载条目的目录。
 可指定名称创建，或不指定/使用 "*" 创建全部。
