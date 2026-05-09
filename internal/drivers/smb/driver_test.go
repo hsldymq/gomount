@@ -1,6 +1,7 @@
 package smb
 
 import (
+	"context"
 	"os"
 	"strings"
 	"testing"
@@ -82,7 +83,7 @@ func TestDriver_buildMountCommand(t *testing.T) {
 		MountDirPath: "/mnt/test",
 	}
 
-	cmd := d.buildMountCommand(entry, "/tmp/creds.txt", entry.SMB.Addr, entry.SMB.GetPort())
+	cmd := d.buildMountCommand(context.Background(), entry, "/tmp/creds.txt", entry.SMB.Addr, entry.SMB.GetPort())
 
 	if cmd == nil {
 		t.Fatal("expected command, got nil")
