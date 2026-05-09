@@ -3,7 +3,6 @@ package interaction
 import (
 	"bytes"
 	"fmt"
-	"io"
 	"os"
 	"os/exec"
 	"strings"
@@ -14,7 +13,7 @@ func RunCommand(cmd *exec.Cmd) error {
 	cmd.Stdout = os.Stdout
 
 	var stderrBuf bytes.Buffer
-	cmd.Stderr = io.MultiWriter(os.Stderr, &stderrBuf)
+	cmd.Stderr = &stderrBuf
 
 	err := cmd.Run()
 	if err != nil {

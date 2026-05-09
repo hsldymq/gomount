@@ -3,6 +3,7 @@ package drivers
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/hsldymq/gomount/internal/config"
 )
@@ -114,4 +115,99 @@ func (e *DriverError) Error() string {
 
 func (e *DriverError) Unwrap() error {
 	return e.Err
+}
+
+func (e *DriverError) CoreMessage() string {
+	return coreMessage(e.Err)
+}
+
+type CommandError struct {
+	Cmd string
+	Err error
+}
+
+func (e *CommandError) Error() string {
+	return fmt.Sprintf("%s: %s", e.Cmd, e.Err)
+}
+
+func (e *CommandError) Unwrap() error {
+	return e.Err
+}
+
+type TunnelError struct {
+	Host string
+	Err  error
+}
+
+func (e *TunnelError) Error() string {
+	return fmt.Sprintf("ssh tunnel(%s): %s", e.Host, e.Err)
+}
+
+func (e *TunnelError) Unwrap() error {
+	return e.Err
+}
+
+func coreMessage(err error) string {
+	for {
+		switch e := err.(type) {
+		case *CommandError:
+			return extractCoreFromStderr(e.Err.Error())
+		case *TunnelError:
+			return coreMessage(e.Err)
+		case *DriverError:
+			return coreMessage(e.Err)
+		default:
+			if unwrapper, ok := err.(interface{ Unwrap() error }); ok {
+				if inner := unwrapper.Unwrap(); inner != nil {
+					err = inner
+					continue
+				}
+			}
+			return firstLine(err.Error())
+		}
+	}
+}
+
+func ErrorContext(err error, op string) string {
+	var parts []string
+	current := err
+	for {
+		switch e := current.(type) {
+		case *CommandError:
+			if op != "" {
+				parts = append(parts, op+" failed ("+e.Cmd+")")
+			} else {
+				parts = append(parts, e.Cmd+" failed")
+			}
+		case *TunnelError:
+			parts = append(parts, "ssh tunnel "+e.Host)
+		}
+		if unwrapper, ok := current.(interface{ Unwrap() error }); ok {
+			if inner := unwrapper.Unwrap(); inner != nil {
+				current = inner
+				continue
+			}
+		}
+		break
+	}
+	return strings.Join(parts, " > ")
+}
+
+func extractCoreFromStderr(stderr string) string {
+	line := firstLine(stderr)
+	for {
+		idx := strings.LastIndex(line, ": ")
+		if idx == -1 {
+			break
+		}
+		line = strings.TrimSpace(line[idx+2:])
+	}
+	return line
+}
+
+func firstLine(s string) string {
+	if idx := strings.Index(s, "\n"); idx != -1 {
+		return strings.TrimSpace(s[:idx])
+	}
+	return strings.TrimSpace(s)
 }

@@ -3,12 +3,12 @@ package main
 import (
 	"context"
 	_ "embed"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
-
 	"strconv"
+	"strings"
 
 	"github.com/hsldymq/gomount/internal/config"
 	"github.com/hsldymq/gomount/internal/drivers"
@@ -200,7 +200,7 @@ func mountEntries(ctx context.Context, mgr *drivers.Manager, entries []*config.M
 		fmt.Printf("    To: %s\n", entry.MountDirPath)
 
 		if err := mgr.Mount(ctx, entry.Name); err != nil {
-			fmt.Fprintf(os.Stderr, "    ERROR: %s\n\n", shortError(err))
+			printIndentedError(err)
 			fail++
 			continue
 		}
@@ -235,7 +235,7 @@ func unmountEntries(ctx context.Context, mgr *drivers.Manager, entries []*config
 		}
 
 		if err := mgr.Unmount(ctx, entry.Name); err != nil {
-			fmt.Fprintf(os.Stderr, "    ERROR: %s\n\n", shortError(err))
+			printIndentedError(err)
 			fail++
 			continue
 		}
@@ -352,16 +352,21 @@ func runInteractive(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func shortError(err error) string {
-	msg := err.Error()
-	for {
-		idx := strings.LastIndex(msg, ": ")
-		if idx == -1 {
-			break
+func printIndentedError(err error) {
+	var de *drivers.DriverError
+	if errors.As(err, &de) {
+		fmt.Fprintf(os.Stderr, "    ERROR: %s\n", de.CoreMessage())
+		if ctx := drivers.ErrorContext(err, de.Op); ctx != "" {
+			fmt.Fprintf(os.Stderr, "           %s\n", ctx)
 		}
-		msg = strings.TrimSpace(msg[idx+2:])
+	} else {
+		msg := err.Error()
+		if idx := strings.Index(msg, "\n"); idx != -1 {
+			msg = msg[:idx]
+		}
+		fmt.Fprintf(os.Stderr, "    ERROR: %s\n", strings.TrimSpace(msg))
 	}
-	return msg
+	fmt.Println()
 }
 
 type mkdirResultKind int

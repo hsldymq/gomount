@@ -61,7 +61,7 @@ func (d *Driver) Mount(ctx context.Context, entry *config.MountEntry) error {
 			Driver: d.Type(),
 			Op:     "mount",
 			Entry:  entry.Name,
-			Err:    fmt.Errorf("sshfs failed: %w", err),
+			Err:    &drivers.CommandError{Cmd: "sshfs", Err: err},
 		}
 	}
 
@@ -75,7 +75,7 @@ func (d *Driver) Unmount(ctx context.Context, entry *config.MountEntry) error {
 			Driver: d.Type(),
 			Op:     "unmount",
 			Entry:  entry.Name,
-			Err:    fmt.Errorf("fusermount failed: %w", err),
+			Err:    &drivers.CommandError{Cmd: "fusermount", Err: err},
 		}
 	}
 	return nil

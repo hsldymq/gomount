@@ -65,7 +65,7 @@ func (d *Driver) Mount(ctx context.Context, entry *config.MountEntry) error {
 				Driver: d.Type(),
 				Op:     "mount",
 				Entry:  entry.Name,
-				Err:    fmt.Errorf("failed to establish ssh tunnel: %w", err),
+				Err:    &drivers.TunnelError{Host: entry.SSHTunnel.Host, Err: err},
 			}
 		}
 		smbAddr = "localhost"
@@ -105,7 +105,7 @@ func (d *Driver) Mount(ctx context.Context, entry *config.MountEntry) error {
 			Driver: d.Type(),
 			Op:     "mount",
 			Entry:  entry.Name,
-			Err:    fmt.Errorf("mount.cifs failed: %w", err),
+			Err:    &drivers.CommandError{Cmd: "mount.cifs", Err: err},
 		}
 	}
 

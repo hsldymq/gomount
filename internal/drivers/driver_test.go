@@ -156,3 +156,76 @@ func TestDriverError(t *testing.T) {
 		t.Error("Unwrap() should return original error")
 	}
 }
+
+func TestCommandError(t *testing.T) {
+	err := &CommandError{Cmd: "mount.cifs", Err: fmt.Errorf("mount error(13): Permission denied")}
+
+	if err.Error() != "mount.cifs: mount error(13): Permission denied" {
+		t.Errorf("unexpected Error(): %s", err.Error())
+	}
+	if err.Unwrap().Error() != "mount error(13): Permission denied" {
+		t.Error("Unwrap() should return original error")
+	}
+}
+
+func TestTunnelError(t *testing.T) {
+	err := &TunnelError{Host: "bastion.example.com", Err: fmt.Errorf("connection refused")}
+
+	if err.Error() != "ssh tunnel(bastion.example.com): connection refused" {
+		t.Errorf("unexpected Error(): %s", err.Error())
+	}
+	if err.Unwrap().Error() != "connection refused" {
+		t.Error("Unwrap() should return original error")
+	}
+}
+
+func TestCoreMessage_PlainError(t *testing.T) {
+	msg := coreMessage(fmt.Errorf("something failed"))
+	if msg != "something failed" {
+		t.Errorf("expected 'something failed', got '%s'", msg)
+	}
+}
+
+func TestCoreMessage_CommandError(t *testing.T) {
+	err := &CommandError{Cmd: "mount.cifs", Err: fmt.Errorf("mount error(13): Permission denied\nRefer to the mount.cifs(8) manual page")}
+	msg := coreMessage(err)
+	if msg != "Permission denied" {
+		t.Errorf("expected 'Permission denied', got '%s'", msg)
+	}
+}
+
+func TestCoreMessage_DriverWrappingCommandError(t *testing.T) {
+	cmdErr := &CommandError{Cmd: "mount.cifs", Err: fmt.Errorf("mount error(13): Permission denied\nRefer to manual")}
+	err := &DriverError{Driver: "smb", Op: "mount", Entry: "nas", Err: cmdErr}
+	msg := err.CoreMessage()
+	if msg != "Permission denied" {
+		t.Errorf("expected 'Permission denied', got '%s'", msg)
+	}
+}
+
+func TestCoreMessage_TunnelError(t *testing.T) {
+	tunnelErr := &TunnelError{Host: "bastion", Err: fmt.Errorf("connection refused")}
+	msg := coreMessage(tunnelErr)
+	if msg != "connection refused" {
+		t.Errorf("expected 'connection refused', got '%s'", msg)
+	}
+}
+
+func TestErrorContext(t *testing.T) {
+	cmdErr := &CommandError{Cmd: "mount.cifs", Err: fmt.Errorf("Permission denied")}
+	err := &DriverError{Driver: "smb", Op: "mount", Entry: "nas", Err: cmdErr}
+	ctx := ErrorContext(err, "mount")
+	if ctx != "mount failed (mount.cifs)" {
+		t.Errorf("expected 'mount failed (mount.cifs)', got '%s'", ctx)
+	}
+}
+
+func TestErrorContext_TunnelAndCommand(t *testing.T) {
+	cmdErr := &CommandError{Cmd: "mount.cifs", Err: fmt.Errorf("Permission denied")}
+	tunnelErr := &TunnelError{Host: "bastion", Err: cmdErr}
+	err := &DriverError{Driver: "smb", Op: "mount", Entry: "nas", Err: tunnelErr}
+	ctx := ErrorContext(err, "mount")
+	if ctx != "ssh tunnel bastion > mount failed (mount.cifs)" {
+		t.Errorf("expected 'ssh tunnel bastion > mount failed (mount.cifs)', got '%s'", ctx)
+	}
+}
