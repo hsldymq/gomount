@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	DefaultPort    = 19350
+	DefaultPort    = 13579
 	DaemonEnvKey   = "GOMOUNT_DAEMON"
 	DaemonEnvValue = "1"
 )

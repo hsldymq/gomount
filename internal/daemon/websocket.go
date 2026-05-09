@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -13,9 +14,11 @@ import (
 
 var upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool {
-		// Only allow localhost
 		host := r.Host
-		return host == "127.0.0.1:13579" || host == "localhost:13579"
+		if idx := strings.LastIndex(host, ":"); idx != -1 {
+			host = host[:idx]
+		}
+		return host == "127.0.0.1" || host == "localhost" || host == "::1"
 	},
 	ReadBufferSize:  1024,
 	WriteBufferSize: 1024,

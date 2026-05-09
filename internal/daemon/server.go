@@ -47,16 +47,19 @@ func RunDaemon(handlers *Handlers, cfg DaemonConfig) error {
 	go func() {
 		<-sigChan
 		handlers.UnmountAll()
-		CleanupDaemonInfo()
 		srv.Close()
 	}()
 
-	err := srv.ListenAndServe()
-	if err == http.ErrServerClosed {
+	handlers.Shutdown = func() {
+		handlers.UnmountAll()
 		CleanupDaemonInfo()
-		return nil
+		srv.Close()
 	}
 
+	err := srv.ListenAndServe()
 	CleanupDaemonInfo()
+	if err == http.ErrServerClosed {
+		return nil
+	}
 	return err
 }

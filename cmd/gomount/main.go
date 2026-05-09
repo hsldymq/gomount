@@ -55,7 +55,7 @@ func init() {
 	rootCmd.AddCommand(mkdirCmd)
 	rootCmd.AddCommand(configExampleCmd)
 
-	daemonCmd.AddCommand(daemonStopCmd)
+	daemonCmd.AddCommand(daemonDownCmd)
 	daemonCmd.AddCommand(daemonStatusCmd)
 	rootCmd.AddCommand(daemonCmd)
 
