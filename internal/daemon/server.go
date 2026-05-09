@@ -1,0 +1,59 @@
+package daemon
+
+import (
+	"context"
+	"fmt"
+	"net/http"
+	"os"
+	"os/signal"
+	"strconv"
+	"syscall"
+)
+
+type Handlers struct {
+	Mount      func(ctx context.Context, name string) (string, error)
+	Unmount    func(ctx context.Context, name string) (string, error)
+	UnmountAll func()
+	List       func() []MountEntryStatus
+	Shutdown   func()
+}
+
+func RunDaemon(handlers *Handlers, cfg DaemonConfig) error {
+	port := cfg.GetPort()
+	if envPort := os.Getenv("GOMOUNT_DAEMON_PORT"); envPort != "" {
+		if p, err := strconv.Atoi(envPort); err == nil {
+			port = p
+		}
+	}
+
+	wsServer := NewWebSocketServer(handlers)
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/ws", wsServer.HandleWebSocket)
+
+	srv := &http.Server{
+		Addr:    fmt.Sprintf("127.0.0.1:%d", port),
+		Handler: mux,
+	}
+
+	WriteDaemonInfo(os.Getpid(), port)
+
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGTERM, syscall.SIGINT)
+
+	go func() {
+		<-sigChan
+		handlers.UnmountAll()
+		CleanupDaemonInfo()
+		srv.Close()
+	}()
+
+	err := srv.ListenAndServe()
+	if err == http.ErrServerClosed {
+		CleanupDaemonInfo()
+		return nil
+	}
+
+	CleanupDaemonInfo()
+	return err
+}
