@@ -28,23 +28,30 @@ func runInteractive(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
+	defer client.Close()
 
-	resp, err := client.List()
+	meta := getMetaInfo()
+
+	resp, err := client.List(meta)
 	if err != nil {
 		return fmt.Errorf("failed to list mounts: %w", err)
 	}
 
-	entries := make([]config.MountEntry, len(resp.Mounts))
-	for i, m := range resp.Mounts {
-		entries[i] = config.MountEntry{
-			Name:         m.Name,
-			Type:         m.Type,
-			MountDirPath: m.MountPath,
-			IsMounted:    m.Mounted,
+	var mounts []config.MountEntry
+	if data, ok := resp.Data.([]interface{}); ok {
+		for _, item := range data {
+			if m, ok := item.(map[string]interface{}); ok {
+				mounts = append(mounts, config.MountEntry{
+					Name:         getString(m, "name"),
+					Type:         getString(m, "type"),
+					MountDirPath: getString(m, "mount_path"),
+					IsMounted:    getBool(m, "mounted"),
+				})
+			}
 		}
 	}
 
-	result := tui.SelectMountAction(entries)
+	result := tui.SelectMountAction(mounts)
 	if result.Cancelled {
 		fmt.Println("Cancelled")
 		return nil
@@ -55,12 +62,12 @@ func runInteractive(cmd *cobra.Command, args []string) error {
 
 	var failCount int
 	for _, entry := range result.ToUnmount {
-		resp, err := client.Unmount(entry.Name)
+		result, err := client.Unmount([]string{entry.Name}, meta)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "  ERROR %s: %v\n", entry.Name, err)
 			failCount++
-		} else if !resp.Success {
-			fmt.Fprintf(os.Stderr, "  ERROR %s: %s\n", entry.Name, resp.Message)
+		} else if result.Status != "success" {
+			fmt.Fprintf(os.Stderr, "  ERROR %s: %s\n", entry.Name, result.Error)
 			failCount++
 		} else {
 			fmt.Printf("  %s: unmounted\n", entry.Name)
@@ -68,12 +75,12 @@ func runInteractive(cmd *cobra.Command, args []string) error {
 	}
 
 	for _, entry := range result.ToMount {
-		resp, err := client.Mount(entry.Name)
+		result, err := client.Mount([]string{entry.Name}, meta)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "  ERROR %s: %v\n", entry.Name, err)
 			failCount++
-		} else if !resp.Success {
-			fmt.Fprintf(os.Stderr, "  ERROR %s: %s\n", entry.Name, resp.Message)
+		} else if result.Status != "success" {
+			fmt.Fprintf(os.Stderr, "  ERROR %s: %s\n", entry.Name, result.Error)
 			failCount++
 		} else {
 			fmt.Printf("  %s: mounted\n", entry.Name)

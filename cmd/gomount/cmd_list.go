@@ -28,14 +28,31 @@ func runList(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
+	defer client.Close()
 
-	resp, err := client.List()
+	meta := getMetaInfo()
+
+	resp, err := client.List(meta)
 	if err != nil {
 		return fmt.Errorf("failed to list mounts: %w", err)
 	}
 
-	entries := make([]config.MountEntry, len(resp.Mounts))
-	for i, m := range resp.Mounts {
+	var mounts []daemon.MountEntryStatus
+	if data, ok := resp.Data.([]interface{}); ok {
+		for _, item := range data {
+			if m, ok := item.(map[string]interface{}); ok {
+				mounts = append(mounts, daemon.MountEntryStatus{
+					Name:      getString(m, "name"),
+					Type:      getString(m, "type"),
+					MountPath: getString(m, "mount_path"),
+					Mounted:   getBool(m, "mounted"),
+				})
+			}
+		}
+	}
+
+	entries := make([]config.MountEntry, len(mounts))
+	for i, m := range mounts {
 		entries[i] = config.MountEntry{
 			Name:         m.Name,
 			Type:         m.Type,
@@ -49,6 +66,24 @@ func runList(cmd *cobra.Command, args []string) error {
 	}
 
 	return nil
+}
+
+func getString(m map[string]interface{}, key string) string {
+	if v, ok := m[key]; ok {
+		if s, ok := v.(string); ok {
+			return s
+		}
+	}
+	return ""
+}
+
+func getBool(m map[string]interface{}, key string) bool {
+	if v, ok := m[key]; ok {
+		if b, ok := v.(bool); ok {
+			return b
+		}
+	}
+	return false
 }
 
 var daemonCmd = &cobra.Command{

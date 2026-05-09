@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/user"
+	"strconv"
 
 	"github.com/hsldymq/gomount/internal/config"
 	"github.com/hsldymq/gomount/internal/daemon"
@@ -72,11 +74,11 @@ func runAsDaemon() {
 	}
 }
 
-func ensureDaemon(cfg *config.Config) (*daemon.Client, error) {
+func ensureDaemon(cfg *config.Config) (*daemon.WSClient, error) {
 	info, err := daemon.ReadDaemonInfo()
 	if err == nil {
-		client := daemon.NewClient(info.Port)
-		if _, err := client.Health(); err == nil {
+		client, err := daemon.NewWSClient(info.Port)
+		if err == nil {
 			return client, nil
 		}
 	}
@@ -95,7 +97,22 @@ func ensureDaemon(cfg *config.Config) (*daemon.Client, error) {
 		return nil, err
 	}
 
-	return daemon.NewClient(info.Port), nil
+	return daemon.NewWSClient(info.Port)
+}
+
+func getMetaInfo() daemon.MetaInfo {
+	currentUser, _ := user.Current()
+	uid, _ := strconv.Atoi(currentUser.Uid)
+	gid, _ := strconv.Atoi(currentUser.Gid)
+
+	home, _ := os.UserHomeDir()
+
+	return daemon.MetaInfo{
+		UID:      uid,
+		GID:      gid,
+		Username: currentUser.Username,
+		Home:     home,
+	}
 }
 
 func createDriverManagerWithMountKit(cfg *config.Config, mountMgr *mountkit.Manager) *drivers.Manager {

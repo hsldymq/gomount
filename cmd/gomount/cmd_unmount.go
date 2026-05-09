@@ -27,24 +27,27 @@ func runUmount(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
+	defer client.Close()
 
 	if len(args) == 0 {
 		fmt.Fprintln(os.Stderr, "No mount entry specified. Use 'gomount interactive' for interactive selection.")
 		return nil
 	}
 
+	meta := getMetaInfo()
+
 	var failCount int
 	for _, name := range args {
-		resp, err := client.Unmount(name)
+		result, err := client.Unmount([]string{name}, meta)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "  ERROR %s: %v\n", name, err)
 			failCount++
 			continue
 		}
-		if resp.Success {
-			fmt.Printf("  %s: %s\n", name, resp.Message)
+		if result.Status == "success" {
+			fmt.Printf("  %s: %s\n", name, result.Message)
 		} else {
-			fmt.Fprintf(os.Stderr, "  ERROR %s: %s\n", name, resp.Message)
+			fmt.Fprintf(os.Stderr, "  ERROR %s: %s\n", name, result.Error)
 			failCount++
 		}
 	}

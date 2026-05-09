@@ -170,10 +170,11 @@ func StartDaemon(configPath string, cfg DaemonConfig) error {
 }
 
 func waitForDaemon(port int, timeout time.Duration) error {
-	client := NewClient(port)
 	deadline := time.Now().Add(timeout)
 	for time.Now().Before(deadline) {
-		if _, err := client.Health(); err == nil {
+		client, err := NewWSClient(port)
+		if err == nil {
+			client.Close()
 			return nil
 		}
 		time.Sleep(200 * time.Millisecond)
@@ -187,8 +188,15 @@ func StopDaemon() error {
 		return err
 	}
 
-	client := NewClient(info.Port)
-	return client.Shutdown()
+	client, err := NewWSClient(info.Port)
+	if err != nil {
+		return fmt.Errorf("failed to connect to daemon: %w", err)
+	}
+	defer client.Close()
+
+	meta := MetaInfo{}
+	_, err = client.Stop(meta)
+	return err
 }
 
 func IsCommandAvailable(name string) bool {

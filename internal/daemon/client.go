@@ -1,113 +1,169 @@
 package daemon
 
 import (
-	"bytes"
+	"bufio"
 	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
+	"net/url"
+	"os"
+	"strings"
+	"sync"
+	"syscall"
+	"time"
+
+	"github.com/gorilla/websocket"
+	"golang.org/x/term"
 )
 
-type Client struct {
-	BaseURL string
-	client  *http.Client
+type WSClient struct {
+	conn    *websocket.Conn
+	mu      sync.Mutex
+	pending map[string]chan *Message
 }
 
-func NewClient(port int) *Client {
-	return &Client{
-		BaseURL: fmt.Sprintf("http://127.0.0.1:%d/api/v1", port),
-		client:  &http.Client{},
+func NewWSClient(port int) (*WSClient, error) {
+	u := url.URL{
+		Scheme: "ws",
+		Host:   fmt.Sprintf("127.0.0.1:%d", port),
+		Path:   "/ws",
+	}
+
+	conn, _, err := websocket.DefaultDialer.Dial(u.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	client := &WSClient{
+		conn:    conn,
+		pending: make(map[string]chan *Message),
+	}
+
+	go client.readLoop()
+
+	return client, nil
+}
+
+func (c *WSClient) readLoop() {
+	for {
+		_, data, err := c.conn.ReadMessage()
+		if err != nil {
+			break
+		}
+
+		var msg Message
+		if err := json.Unmarshal(data, &msg); err != nil {
+			continue
+		}
+
+		c.mu.Lock()
+		ch, exists := c.pending[msg.ID]
+		c.mu.Unlock()
+
+		if exists {
+			ch <- &msg
+		}
 	}
 }
 
-func (c *Client) doRequest(method, path string, body interface{}) ([]byte, error) {
-	var reqBody io.Reader
-	if body != nil {
-		data, err := json.Marshal(body)
+func (c *WSClient) Send(msg *Message) (*Message, error) {
+	c.mu.Lock()
+	ch := make(chan *Message, 1)
+	c.pending[msg.ID] = ch
+	c.mu.Unlock()
+
+	defer func() {
+		c.mu.Lock()
+		delete(c.pending, msg.ID)
+		c.mu.Unlock()
+	}()
+
+	data, _ := json.Marshal(msg)
+	if err := c.conn.WriteMessage(websocket.TextMessage, data); err != nil {
+		return nil, err
+	}
+
+	resp := <-ch
+	return resp, nil
+}
+
+func (c *WSClient) Close() {
+	c.conn.Close()
+}
+
+func (c *WSClient) Mount(names []string, meta MetaInfo) (*ResultPayload, error) {
+	return c.executeCommand(ActionMount, names, meta)
+}
+
+func (c *WSClient) Unmount(names []string, meta MetaInfo) (*ResultPayload, error) {
+	return c.executeCommand(ActionUnmount, names, meta)
+}
+
+func (c *WSClient) List(meta MetaInfo) (*ResultPayload, error) {
+	return c.executeCommand(ActionList, nil, meta)
+}
+
+func (c *WSClient) Stop(meta MetaInfo) (*ResultPayload, error) {
+	return c.executeCommand(ActionStop, nil, meta)
+}
+
+func (c *WSClient) executeCommand(action string, names []string, meta MetaInfo) (*ResultPayload, error) {
+	payload, _ := json.Marshal(CommandPayload{
+		Action: action,
+		Names:  names,
+		Meta:   meta,
+	})
+
+	msg := &Message{
+		Type:    MsgTypeCommand,
+		ID:      generateID(),
+		Payload: payload,
+	}
+
+	resp, err := c.Send(msg)
+	if err != nil {
+		return nil, err
+	}
+
+	// Handle interaction requests
+	for resp.Type == MsgTypeInteraction {
+		var interaction InteractionPayload
+		json.Unmarshal(resp.Payload, &interaction)
+
+		// Prompt user for input
+		value := promptUser(interaction.Prompt, interaction.InputType, interaction.Mask)
+
+		respPayload, _ := json.Marshal(InteractionResponsePayload{Value: value})
+		respMsg := &Message{
+			Type:    MsgTypeInteractionResponse,
+			ID:      resp.ID,
+			Payload: respPayload,
+		}
+
+		resp, err = c.Send(respMsg)
 		if err != nil {
 			return nil, err
 		}
-		reqBody = bytes.NewReader(data)
 	}
 
-	req, err := http.NewRequest(method, c.BaseURL+path, reqBody)
-	if err != nil {
-		return nil, err
-	}
-	if body != nil {
-		req.Header.Set("Content-Type", "application/json")
-	}
-
-	resp, err := c.client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	return io.ReadAll(resp.Body)
+	var result ResultPayload
+	json.Unmarshal(resp.Payload, &result)
+	return &result, nil
 }
 
-func (c *Client) Health() (*HealthResponse, error) {
-	data, err := c.doRequest("GET", "/health", nil)
-	if err != nil {
-		return nil, err
+func promptUser(prompt string, inputType string, mask bool) string {
+	fmt.Print(prompt + " ")
+
+	if mask && inputType == InputTypePassword {
+		bytePassword, _ := term.ReadPassword(int(syscall.Stdin))
+		fmt.Println()
+		return string(bytePassword)
 	}
-	var resp HealthResponse
-	if err := json.Unmarshal(data, &resp); err != nil {
-		return nil, err
-	}
-	return &resp, nil
+
+	reader := bufio.NewReader(os.Stdin)
+	value, _ := reader.ReadString('\n')
+	return strings.TrimSpace(value)
 }
 
-func (c *Client) Mount(name string) (*MountResponse, error) {
-	data, err := c.doRequest("POST", "/mount", MountRequest{Name: name})
-	if err != nil {
-		return nil, err
-	}
-	var resp MountResponse
-	if err := json.Unmarshal(data, &resp); err != nil {
-		return nil, err
-	}
-	return &resp, nil
-}
-
-func (c *Client) Unmount(name string) (*MountResponse, error) {
-	data, err := c.doRequest("POST", "/unmount", UnmountRequest{Name: name})
-	if err != nil {
-		return nil, err
-	}
-	var resp MountResponse
-	if err := json.Unmarshal(data, &resp); err != nil {
-		return nil, err
-	}
-	return &resp, nil
-}
-
-func (c *Client) UnmountAll() (*MountResponse, error) {
-	data, err := c.doRequest("POST", "/unmount-all", nil)
-	if err != nil {
-		return nil, err
-	}
-	var resp MountResponse
-	if err := json.Unmarshal(data, &resp); err != nil {
-		return nil, err
-	}
-	return &resp, nil
-}
-
-func (c *Client) List() (*ListResponse, error) {
-	data, err := c.doRequest("GET", "/list", nil)
-	if err != nil {
-		return nil, err
-	}
-	var resp ListResponse
-	if err := json.Unmarshal(data, &resp); err != nil {
-		return nil, err
-	}
-	return &resp, nil
-}
-
-func (c *Client) Shutdown() error {
-	_, err := c.doRequest("POST", "/shutdown", nil)
-	return err
+func generateID() string {
+	return fmt.Sprintf("msg-%d", time.Now().UnixNano())
 }
