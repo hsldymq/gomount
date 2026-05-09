@@ -7,16 +7,20 @@ import (
 	"os/exec"
 
 	"github.com/hsldymq/gomount/internal/config"
+	"github.com/hsldymq/gomount/internal/daemon"
 	"github.com/hsldymq/gomount/internal/drivers"
 	"github.com/hsldymq/gomount/internal/interaction"
+	"github.com/hsldymq/gomount/internal/mountkit"
 	"github.com/hsldymq/gomount/internal/sshtunnel"
 	"github.com/hsldymq/gomount/internal/status"
 )
 
-type Driver struct{}
+type Driver struct {
+	mountMgr *mountkit.Manager
+}
 
-func NewDriver() *Driver {
-	return &Driver{}
+func NewDriver(mgr *mountkit.Manager) *Driver {
+	return &Driver{mountMgr: mgr}
 }
 
 func (d *Driver) Type() string {
@@ -24,37 +28,38 @@ func (d *Driver) Type() string {
 }
 
 func (d *Driver) NeedsSudo() bool {
-	return true
+	return daemon.IsCommandAvailable("mount.cifs")
 }
 
 func (d *Driver) Mount(ctx context.Context, entry *config.MountEntry) error {
 	mounted, err := status.CheckStatus(entry.MountDirPath)
 	if err != nil {
 		return &drivers.DriverError{
-			Driver: d.Type(),
-			Op:     "mount",
-			Entry:  entry.Name,
-			Err:    fmt.Errorf("failed to check mount status: %w", err),
+			Driver: d.Type(), Op: "mount", Entry: entry.Name,
+			Err: fmt.Errorf("failed to check mount status: %w", err),
 		}
 	}
 	if mounted {
 		return &drivers.DriverError{
-			Driver: d.Type(),
-			Op:     "mount",
-			Entry:  entry.Name,
-			Err:    fmt.Errorf("already mounted at %s", entry.MountDirPath),
+			Driver: d.Type(), Op: "mount", Entry: entry.Name,
+			Err: fmt.Errorf("already mounted at %s", entry.MountDirPath),
 		}
 	}
 
 	if err := os.MkdirAll(entry.MountDirPath, 0755); err != nil {
 		return &drivers.DriverError{
-			Driver: d.Type(),
-			Op:     "mount",
-			Entry:  entry.Name,
-			Err:    fmt.Errorf("failed to create mount directory: %w", err),
+			Driver: d.Type(), Op: "mount", Entry: entry.Name,
+			Err: fmt.Errorf("failed to create mount directory: %w", err),
 		}
 	}
 
+	if daemon.IsCommandAvailable("mount.cifs") {
+		return d.mountCIFS(ctx, entry)
+	}
+	return d.mountRclone(ctx, entry)
+}
+
+func (d *Driver) mountCIFS(ctx context.Context, entry *config.MountEntry) error {
 	smbAddr := entry.SMB.Addr
 	smbPort := entry.SMB.GetPort()
 	if entry.SSHTunnel != nil {
@@ -62,10 +67,8 @@ func (d *Driver) Mount(ctx context.Context, entry *config.MountEntry) error {
 		localPort, err := sshtunnel.EstablishForMount(ctx, entry.Name, entry.SSHTunnel.Host, remoteAddr)
 		if err != nil {
 			return &drivers.DriverError{
-				Driver: d.Type(),
-				Op:     "mount",
-				Entry:  entry.Name,
-				Err:    &drivers.TunnelError{Host: entry.SSHTunnel.Host, Err: err},
+				Driver: d.Type(), Op: "mount", Entry: entry.Name,
+				Err: &drivers.TunnelError{Host: entry.SSHTunnel.Host, Err: err},
 			}
 		}
 		smbAddr = "localhost"
@@ -75,10 +78,8 @@ func (d *Driver) Mount(ctx context.Context, entry *config.MountEntry) error {
 	credsFile, err := d.createCredentialFile(entry)
 	if err != nil {
 		return &drivers.DriverError{
-			Driver: d.Type(),
-			Op:     "mount",
-			Entry:  entry.Name,
-			Err:    err,
+			Driver: d.Type(), Op: "mount", Entry: entry.Name,
+			Err: err,
 		}
 	}
 	defer os.Remove(credsFile)
@@ -89,10 +90,8 @@ func (d *Driver) Mount(ctx context.Context, entry *config.MountEntry) error {
 		cmd, err = interaction.WrapWithSudo(cmd)
 		if err != nil {
 			return &drivers.DriverError{
-				Driver: d.Type(),
-				Op:     "mount",
-				Entry:  entry.Name,
-				Err:    err,
+				Driver: d.Type(), Op: "mount", Entry: entry.Name,
+				Err: err,
 			}
 		}
 	}
@@ -102,10 +101,41 @@ func (d *Driver) Mount(ctx context.Context, entry *config.MountEntry) error {
 			sshtunnel.Teardown(entry.Name)
 		}
 		return &drivers.DriverError{
-			Driver: d.Type(),
-			Op:     "mount",
-			Entry:  entry.Name,
-			Err:    &drivers.CommandError{Cmd: "mount.cifs", Err: err},
+			Driver: d.Type(), Op: "mount", Entry: entry.Name,
+			Err: &drivers.CommandError{Cmd: "mount.cifs", Err: err},
+		}
+	}
+
+	return nil
+}
+
+func (d *Driver) mountRclone(ctx context.Context, entry *config.MountEntry) error {
+	smbAddr := entry.SMB.Addr
+	smbPort := entry.SMB.GetPort()
+
+	if entry.SSHTunnel != nil {
+		remoteAddr := fmt.Sprintf("%s:%d", entry.SMB.Addr, smbPort)
+		localPort, err := sshtunnel.EstablishForMount(ctx, entry.Name, entry.SSHTunnel.Host, remoteAddr)
+		if err != nil {
+			return &drivers.DriverError{
+				Driver: d.Type(), Op: "mount", Entry: entry.Name,
+				Err: &drivers.TunnelError{Host: entry.SSHTunnel.Host, Err: err},
+			}
+		}
+		smbAddr = "localhost"
+		smbPort = localPort
+	}
+
+	remoteName := fmt.Sprintf("gomount_smb_%s", entry.Name)
+	remotePath := mountkit.RegisterSMBRemote(remoteName, smbAddr, smbPort, entry.SMB.Username, entry.SMB.Password, entry.SMB.ShareName)
+
+	if err := d.mountMgr.Mount(ctx, remotePath, entry.MountDirPath, entry.Name); err != nil {
+		if entry.SSHTunnel != nil {
+			sshtunnel.Teardown(entry.Name)
+		}
+		return &drivers.DriverError{
+			Driver: d.Type(), Op: "mount", Entry: entry.Name,
+			Err: err,
 		}
 	}
 
@@ -113,27 +143,32 @@ func (d *Driver) Mount(ctx context.Context, entry *config.MountEntry) error {
 }
 
 func (d *Driver) Unmount(ctx context.Context, entry *config.MountEntry) error {
-	cmd := exec.CommandContext(ctx, "umount", entry.MountDirPath)
-
-	var err error
-	if interaction.NeedsPrivilege() {
-		cmd, err = interaction.WrapWithSudo(cmd)
-		if err != nil {
+	if d.mountMgr.IsMounted(entry.MountDirPath) {
+		if err := d.mountMgr.Unmount(entry.MountDirPath); err != nil {
 			return &drivers.DriverError{
-				Driver: d.Type(),
-				Op:     "unmount",
-				Entry:  entry.Name,
-				Err:    err,
+				Driver: d.Type(), Op: "unmount", Entry: entry.Name,
+				Err: err,
 			}
 		}
-	}
+	} else {
+		cmd := exec.CommandContext(ctx, "umount", entry.MountDirPath)
 
-	if err := interaction.RunCommandSilent(cmd); err != nil {
-		return &drivers.DriverError{
-			Driver: d.Type(),
-			Op:     "unmount",
-			Entry:  entry.Name,
-			Err:    err,
+		var err error
+		if interaction.NeedsPrivilege() {
+			cmd, err = interaction.WrapWithSudo(cmd)
+			if err != nil {
+				return &drivers.DriverError{
+					Driver: d.Type(), Op: "unmount", Entry: entry.Name,
+					Err: err,
+				}
+			}
+		}
+
+		if err := interaction.RunCommandSilent(cmd); err != nil {
+			return &drivers.DriverError{
+				Driver: d.Type(), Op: "unmount", Entry: entry.Name,
+				Err: err,
+			}
 		}
 	}
 
@@ -148,14 +183,12 @@ func (d *Driver) Status(ctx context.Context, entry *config.MountEntry) (*drivers
 	mounted, err := status.CheckStatus(entry.MountDirPath)
 	if err != nil {
 		return nil, &drivers.DriverError{
-			Driver: d.Type(),
-			Op:     "status",
-			Entry:  entry.Name,
-			Err:    fmt.Errorf("failed to check mount status: %w", err),
+			Driver: d.Type(), Op: "status", Entry: entry.Name,
+			Err: fmt.Errorf("failed to check mount status: %w", err),
 		}
 	}
 
-	status := &drivers.MountStatus{
+	s := &drivers.MountStatus{
 		Mounted: mounted,
 		Details: map[string]string{
 			"type": "smb",
@@ -164,13 +197,13 @@ func (d *Driver) Status(ctx context.Context, entry *config.MountEntry) (*drivers
 	}
 
 	if mounted {
-		status.Message = fmt.Sprintf("Mounted at %s", entry.MountDirPath)
-		status.Details["share"] = entry.SMB.ShareName
+		s.Message = fmt.Sprintf("Mounted at %s", entry.MountDirPath)
+		s.Details["share"] = entry.SMB.ShareName
 	} else {
-		status.Message = "Not mounted"
+		s.Message = "Not mounted"
 	}
 
-	return status, nil
+	return s, nil
 }
 
 func (d *Driver) Validate(entry *config.MountEntry) error {

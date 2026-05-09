@@ -9,14 +9,14 @@ import (
 )
 
 func TestDriver_Type(t *testing.T) {
-	d := NewDriver()
+	d := NewDriver(nil)
 	if d.Type() != "smb" {
 		t.Errorf("expected type 'smb', got '%s'", d.Type())
 	}
 }
 
 func TestDriver_Validate(t *testing.T) {
-	d := NewDriver()
+	d := NewDriver(nil)
 
 	tests := []struct {
 		name    string
@@ -75,7 +75,7 @@ func TestDriver_Validate(t *testing.T) {
 }
 
 func TestDriver_buildMountCommand(t *testing.T) {
-	d := NewDriver()
+	d := NewDriver(nil)
 	entry := &config.MountEntry{
 		Name:         "test",
 		SMB:          &config.SMBConfig{Addr: "192.168.1.100", Port: 445, ShareName: "shared", Username: "user", Password: "pass"},
@@ -102,7 +102,7 @@ func TestDriver_buildMountCommand(t *testing.T) {
 }
 
 func TestDriver_createCredentialFile(t *testing.T) {
-	d := NewDriver()
+	d := NewDriver(nil)
 	entry := &config.MountEntry{
 		SMB: &config.SMBConfig{Username: "testuser", Password: "testpass"},
 	}

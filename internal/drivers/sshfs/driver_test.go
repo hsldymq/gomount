@@ -8,14 +8,14 @@ import (
 )
 
 func TestDriver_Type(t *testing.T) {
-	d := NewDriver()
+	d := NewDriver(nil)
 	if d.Type() != "sshfs" {
 		t.Errorf("expected type 'sshfs', got '%s'", d.Type())
 	}
 }
 
 func TestDriver_Validate(t *testing.T) {
-	d := NewDriver()
+	d := NewDriver(nil)
 
 	tests := []struct {
 		name    string
@@ -74,7 +74,7 @@ func TestDriver_Validate(t *testing.T) {
 }
 
 func TestDriver_buildMountCommand(t *testing.T) {
-	d := NewDriver()
+	d := NewDriver(nil)
 
 	tests := []struct {
 		name         string

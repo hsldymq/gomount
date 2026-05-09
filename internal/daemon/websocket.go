@@ -146,21 +146,26 @@ func (s *WebSocketServer) handleCommand(client *ClientConn, msg *Message) {
 
 func (s *WebSocketServer) handleMount(ctx context.Context, client *ClientConn, msgID string, payload CommandPayload) {
 	var results []string
-	var lastErr error
+	var successCount, failCount int
 
 	for _, name := range payload.Names {
 		msg, err := s.handlers.Mount(ctx, name)
 		if err != nil {
-			lastErr = err
+			failCount++
 			results = append(results, fmt.Sprintf("%s: failed - %v", name, err))
 		} else {
+			successCount++
 			results = append(results, fmt.Sprintf("%s: %s", name, msg))
 		}
 	}
 
 	status := "success"
-	if lastErr != nil {
-		status = "partial"
+	if failCount > 0 {
+		if successCount > 0 {
+			status = "partial"
+		} else {
+			status = "error"
+		}
 	}
 
 	resultPayload, _ := json.Marshal(ResultPayload{
@@ -177,21 +182,26 @@ func (s *WebSocketServer) handleMount(ctx context.Context, client *ClientConn, m
 
 func (s *WebSocketServer) handleUnmount(ctx context.Context, client *ClientConn, msgID string, payload CommandPayload) {
 	var results []string
-	var lastErr error
+	var successCount, failCount int
 
 	for _, name := range payload.Names {
 		msg, err := s.handlers.Unmount(ctx, name)
 		if err != nil {
-			lastErr = err
+			failCount++
 			results = append(results, fmt.Sprintf("%s: failed - %v", name, err))
 		} else {
+			successCount++
 			results = append(results, fmt.Sprintf("%s: %s", name, msg))
 		}
 	}
 
 	status := "success"
-	if lastErr != nil {
-		status = "partial"
+	if failCount > 0 {
+		if successCount > 0 {
+			status = "partial"
+		} else {
+			status = "error"
+		}
 	}
 
 	resultPayload, _ := json.Marshal(ResultPayload{
@@ -227,8 +237,24 @@ func (s *WebSocketServer) handleStatus(ctx context.Context, client *ClientConn, 
 		return
 	}
 
-	// Implementation depends on handlers
-	s.sendError(client, msgID, "status not yet implemented")
+	name := payload.Names[0]
+	status, err := s.handlers.Status(ctx, name)
+	if err != nil {
+		s.sendError(client, msgID, err.Error())
+		return
+	}
+
+	resultPayload, _ := json.Marshal(ResultPayload{
+		Status:  "success",
+		Message: status.Message,
+		Data:    status,
+	})
+
+	s.sendMessage(client, &Message{
+		Type:    MsgTypeResult,
+		ID:      msgID,
+		Payload: resultPayload,
+	})
 }
 
 func (s *WebSocketServer) handleStop(ctx context.Context, client *ClientConn, msgID string) {

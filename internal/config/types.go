@@ -24,10 +24,15 @@ func (s *StringOrSlice) UnmarshalYAML(value *yaml.Node) error {
 	return fmt.Errorf("sorting.by must be a string or list of strings")
 }
 
+type DaemonConfig struct {
+	Port int `yaml:"port,omitempty" mapstructure:"port"`
+}
+
 type Config struct {
 	Mounts  []MountEntry   `yaml:"mounts" mapstructure:"mounts"`
 	Include []string       `yaml:"include,omitempty" mapstructure:"include"`
 	Sorting *SortingConfig `yaml:"sorting,omitempty" mapstructure:"sorting"`
+	Daemon  *DaemonConfig  `yaml:"daemon,omitempty" mapstructure:"daemon"`
 }
 
 // MountEntry 单个挂载配置（支持多种协议）

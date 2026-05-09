@@ -8,6 +8,8 @@ import (
 	"os/signal"
 	"strconv"
 	"syscall"
+
+	"github.com/hsldymq/gomount/internal/drivers"
 )
 
 type Handlers struct {
@@ -15,6 +17,7 @@ type Handlers struct {
 	Unmount    func(ctx context.Context, name string) (string, error)
 	UnmountAll func()
 	List       func() []MountEntryStatus
+	Status     func(ctx context.Context, name string) (*drivers.MountStatus, error)
 	Shutdown   func()
 }
 

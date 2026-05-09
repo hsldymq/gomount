@@ -8,15 +8,19 @@ import (
 	"strings"
 
 	"github.com/hsldymq/gomount/internal/config"
+	"github.com/hsldymq/gomount/internal/daemon"
 	"github.com/hsldymq/gomount/internal/drivers"
 	"github.com/hsldymq/gomount/internal/interaction"
+	"github.com/hsldymq/gomount/internal/mountkit"
 	"github.com/hsldymq/gomount/internal/status"
 )
 
-type Driver struct{}
+type Driver struct {
+	mountMgr *mountkit.Manager
+}
 
-func NewDriver() *Driver {
-	return &Driver{}
+func NewDriver(mgr *mountkit.Manager) *Driver {
+	return &Driver{mountMgr: mgr}
 }
 
 func (d *Driver) Type() string {
@@ -31,37 +35,49 @@ func (d *Driver) Mount(ctx context.Context, entry *config.MountEntry) error {
 	mounted, err := status.CheckStatus(entry.MountDirPath)
 	if err != nil {
 		return &drivers.DriverError{
-			Driver: d.Type(),
-			Op:     "mount",
-			Entry:  entry.Name,
-			Err:    fmt.Errorf("failed to check mount status: %w", err),
+			Driver: d.Type(), Op: "mount", Entry: entry.Name,
+			Err: fmt.Errorf("failed to check mount status: %w", err),
 		}
 	}
 	if mounted {
 		return &drivers.DriverError{
-			Driver: d.Type(),
-			Op:     "mount",
-			Entry:  entry.Name,
-			Err:    fmt.Errorf("already mounted at %s", entry.MountDirPath),
+			Driver: d.Type(), Op: "mount", Entry: entry.Name,
+			Err: fmt.Errorf("already mounted at %s", entry.MountDirPath),
 		}
 	}
 
 	if err := os.MkdirAll(entry.MountDirPath, 0755); err != nil {
 		return &drivers.DriverError{
-			Driver: d.Type(),
-			Op:     "mount",
-			Entry:  entry.Name,
-			Err:    fmt.Errorf("failed to create mount directory: %w", err),
+			Driver: d.Type(), Op: "mount", Entry: entry.Name,
+			Err: fmt.Errorf("failed to create mount directory: %w", err),
 		}
 	}
 
+	if daemon.IsCommandAvailable("sshfs") {
+		return d.mountSSHFS(entry)
+	}
+	return d.mountRcloneSFTP(ctx, entry)
+}
+
+func (d *Driver) mountSSHFS(entry *config.MountEntry) error {
 	cmd := d.buildMountCommand(entry)
 	if err := interaction.RunCommand(cmd); err != nil {
 		return &drivers.DriverError{
-			Driver: d.Type(),
-			Op:     "mount",
-			Entry:  entry.Name,
-			Err:    &drivers.CommandError{Cmd: "sshfs", Err: err},
+			Driver: d.Type(), Op: "mount", Entry: entry.Name,
+			Err: &drivers.CommandError{Cmd: "sshfs", Err: err},
+		}
+	}
+	return nil
+}
+
+func (d *Driver) mountRcloneSFTP(ctx context.Context, entry *config.MountEntry) error {
+	remoteName := fmt.Sprintf("gomount_sshfs_%s", entry.Name)
+	remotePath := mountkit.RegisterSFTPRemote(remoteName, entry.SSHFS.Host, entry.SSHFS.RemotePath, "ssh")
+
+	if err := d.mountMgr.Mount(ctx, remotePath, entry.MountDirPath, entry.Name); err != nil {
+		return &drivers.DriverError{
+			Driver: d.Type(), Op: "mount", Entry: entry.Name,
+			Err: err,
 		}
 	}
 
@@ -69,13 +85,20 @@ func (d *Driver) Mount(ctx context.Context, entry *config.MountEntry) error {
 }
 
 func (d *Driver) Unmount(ctx context.Context, entry *config.MountEntry) error {
-	cmd := exec.CommandContext(ctx, "fusermount", "-u", entry.MountDirPath)
-	if err := interaction.RunCommandSilent(cmd); err != nil {
-		return &drivers.DriverError{
-			Driver: d.Type(),
-			Op:     "unmount",
-			Entry:  entry.Name,
-			Err:    &drivers.CommandError{Cmd: "fusermount", Err: err},
+	if d.mountMgr.IsMounted(entry.MountDirPath) {
+		if err := d.mountMgr.Unmount(entry.MountDirPath); err != nil {
+			return &drivers.DriverError{
+				Driver: d.Type(), Op: "unmount", Entry: entry.Name,
+				Err: err,
+			}
+		}
+	} else {
+		cmd := exec.CommandContext(ctx, "fusermount", "-u", entry.MountDirPath)
+		if err := interaction.RunCommandSilent(cmd); err != nil {
+			return &drivers.DriverError{
+				Driver: d.Type(), Op: "unmount", Entry: entry.Name,
+				Err: &drivers.CommandError{Cmd: "fusermount", Err: err},
+			}
 		}
 	}
 	return nil
@@ -85,14 +108,12 @@ func (d *Driver) Status(ctx context.Context, entry *config.MountEntry) (*drivers
 	mounted, err := status.CheckStatus(entry.MountDirPath)
 	if err != nil {
 		return nil, &drivers.DriverError{
-			Driver: d.Type(),
-			Op:     "status",
-			Entry:  entry.Name,
-			Err:    fmt.Errorf("failed to check mount status: %w", err),
+			Driver: d.Type(), Op: "status", Entry: entry.Name,
+			Err: fmt.Errorf("failed to check mount status: %w", err),
 		}
 	}
 
-	status := &drivers.MountStatus{
+	s := &drivers.MountStatus{
 		Mounted: mounted,
 		Details: map[string]string{
 			"type":       "sshfs",
@@ -102,12 +123,12 @@ func (d *Driver) Status(ctx context.Context, entry *config.MountEntry) (*drivers
 	}
 
 	if mounted {
-		status.Message = fmt.Sprintf("Mounted at %s", entry.MountDirPath)
+		s.Message = fmt.Sprintf("Mounted at %s", entry.MountDirPath)
 	} else {
-		status.Message = "Not mounted"
+		s.Message = "Not mounted"
 	}
 
-	return status, nil
+	return s, nil
 }
 
 func (d *Driver) Validate(entry *config.MountEntry) error {
