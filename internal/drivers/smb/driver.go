@@ -86,16 +86,7 @@ func (d *Driver) mountCIFS(ctx context.Context, entry *config.MountEntry) error 
 
 	cmd := d.buildMountCommand(entry, credsFile, smbAddr, smbPort)
 
-	if interaction.NeedsPrivilege() {
-		cmd, err = interaction.WrapWithSudo(cmd)
-		if err != nil {
-			return &drivers.DriverError{
-				Driver: d.Type(), Op: "mount", Entry: entry.Name,
-				Err: err,
-			}
-		}
-	}
-
+	// Directly execute - daemon is root, no sudo needed
 	if err := interaction.RunCommand(cmd); err != nil {
 		if entry.SSHTunnel != nil {
 			sshtunnel.Teardown(entry.Name)
@@ -151,19 +142,8 @@ func (d *Driver) Unmount(ctx context.Context, entry *config.MountEntry) error {
 			}
 		}
 	} else {
+		// System mount - directly umount (daemon is root)
 		cmd := exec.CommandContext(ctx, "umount", entry.MountDirPath)
-
-		var err error
-		if interaction.NeedsPrivilege() {
-			cmd, err = interaction.WrapWithSudo(cmd)
-			if err != nil {
-				return &drivers.DriverError{
-					Driver: d.Type(), Op: "unmount", Entry: entry.Name,
-					Err: err,
-				}
-			}
-		}
-
 		if err := interaction.RunCommandSilent(cmd); err != nil {
 			return &drivers.DriverError{
 				Driver: d.Type(), Op: "unmount", Entry: entry.Name,
