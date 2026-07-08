@@ -1,6 +1,6 @@
 # fs_mount 使用指南
 
-一个支持多种协议（SMB、SSHFS、SSH隧道+SMB、WebDAV）的远程文件系统挂载工具。
+一个支持多种协议（SMB、SSHFS、SSH隧道+SMB）的远程文件系统挂载工具。
 
 ## 目录
 
@@ -17,13 +17,13 @@
 
 ```bash
 # Debian/Ubuntu
-sudo apt install cifs-utils sshfs davfs2
+sudo apt install cifs-utils sshfs
 
 # Arch Linux
-sudo pacman -S cifs-utils sshfs davfs2
+sudo pacman -S cifs-utils sshfs
 
 # Fedora
-sudo dnf install cifs-utils fuse-sshfs davfs2
+sudo dnf install cifs-utils fuse-sshfs
 ```
 
 ### 2. 创建配置文件
@@ -99,18 +99,6 @@ mounts:
 
 > SSH 连接细节（用户名、端口、密钥、ProxyJump 等）均由 `~/.ssh/config` 管理。
 
-#### WebDAV
-
-```yaml
-mounts:
-  - name: nextcloud
-    type: webdav
-    webdav:
-      url: https://cloud.example.com/remote.php/dav/files/user/
-      username: user
-      password: pass
-```
-
 ---
 
 ## 使用场景
@@ -131,12 +119,6 @@ mounts:
     sshfs:
       host: dev.company.com
       remote_path: /home/dev/projects
-
-  - name: gitlab
-    type: webdav
-    webdav:
-      url: https://gitlab.company.com/dav
-      username: developer
 ```
 
 使用方法：
@@ -144,12 +126,10 @@ mounts:
 # 挂载开发环境所需资源
 gomount mount nas
 gomount mount dev-server
-gomount mount gitlab
 
 # 下班卸载
 gomount umount nas
 gomount umount dev-server
-gomount umount gitlab
 ```
 
 ### 场景2：远程访问家里NAS
@@ -165,25 +145,6 @@ mounts:
       remote_path: /data/photos
     mount_dir_path: /mnt/home-nas
 ```
-
-### 场景3：多云存储管理
-
-```yaml
-mounts:
-  - name: nextcloud-personal
-    type: webdav
-    webdav:
-      url: https://cloud.personal.com/dav
-      username: me
-  
-  - name: nextcloud-work
-    type: webdav
-    webdav:
-      url: https://cloud.company.com/dav
-      username: work
-```
-
----
 
 ## 常见问题
 

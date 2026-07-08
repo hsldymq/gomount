@@ -134,3 +134,18 @@ func TestDriver_buildMountCommand(t *testing.T) {
 		})
 	}
 }
+
+func TestDriver_buildUnmountCommand(t *testing.T) {
+	d := NewDriver()
+	entry := &config.MountEntry{MountDirPath: "/mnt/test"}
+
+	cmd := d.buildUnmountCommand(entry)
+	if cmd == nil {
+		t.Fatal("expected command, got nil")
+	}
+
+	argsStr := strings.Join(cmd.Args, " ")
+	if !strings.Contains(argsStr, "/mnt/test") {
+		t.Errorf("expected mount path in args, got: %s", argsStr)
+	}
+}

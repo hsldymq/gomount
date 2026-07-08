@@ -69,7 +69,7 @@ func (d *Driver) Mount(ctx context.Context, entry *config.MountEntry) error {
 }
 
 func (d *Driver) Unmount(ctx context.Context, entry *config.MountEntry) error {
-	cmd := exec.CommandContext(ctx, "fusermount", "-u", entry.MountDirPath)
+	cmd := d.buildUnmountCommand(entry)
 	if err := interaction.RunCommandSilent(cmd); err != nil {
 		return &drivers.DriverError{
 			Driver: d.Type(),

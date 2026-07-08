@@ -14,7 +14,6 @@ import (
 	"github.com/hsldymq/gomount/internal/drivers"
 	smbDriver "github.com/hsldymq/gomount/internal/drivers/smb"
 	sshfsDriver "github.com/hsldymq/gomount/internal/drivers/sshfs"
-	webdavDriver "github.com/hsldymq/gomount/internal/drivers/webdav"
 	"github.com/hsldymq/gomount/internal/interaction"
 	"github.com/hsldymq/gomount/internal/status"
 	"github.com/hsldymq/gomount/internal/tui"
@@ -148,7 +147,6 @@ func createDriverManager(cfg *config.Config) *drivers.Manager {
 	mgr := drivers.NewManager(cfg)
 	mgr.RegisterDriver(smbDriver.NewDriver())
 	mgr.RegisterDriver(sshfsDriver.NewDriver())
-	mgr.RegisterDriver(webdavDriver.NewDriver())
 	return mgr
 }
 
@@ -176,8 +174,13 @@ func mountEntries(ctx context.Context, mgr *drivers.Manager, entries []*config.M
 
 	fmt.Printf("Mounting %d share(s)...\n", len(entries))
 
-	if err := interaction.EnsureSudoCached(); err != nil {
-		fmt.Fprintf(os.Stderr, "Warning: sudo authentication failed: %v\n", err)
+	needSudo, err := entriesNeedSudo(mgr, entries)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: failed to inspect mount privileges: %v\n", err)
+	} else if needSudo {
+		if err := interaction.EnsureSudoCached(); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: sudo authentication failed: %v\n", err)
+		}
 	}
 
 	for i, entry := range entries {
@@ -194,8 +197,6 @@ func mountEntries(ctx context.Context, mgr *drivers.Manager, entries []*config.M
 			fmt.Printf("    From: //%s:%d/%s\n", entry.SMB.Addr, entry.SMB.GetPort(), entry.SMB.ShareName)
 		case "sshfs":
 			fmt.Printf("    From: %s:%s\n", entry.SSHFS.Host, entry.SSHFS.RemotePath)
-		case "webdav":
-			fmt.Printf("    From: %s\n", entry.WebDAV.URL)
 		}
 		fmt.Printf("    To: %s\n", entry.MountDirPath)
 
@@ -213,6 +214,19 @@ func mountEntries(ctx context.Context, mgr *drivers.Manager, entries []*config.M
 	return
 }
 
+func entriesNeedSudo(mgr *drivers.Manager, entries []*config.MountEntry) (bool, error) {
+	for _, entry := range entries {
+		driver, err := mgr.DetectDriver(entry)
+		if err != nil {
+			return false, err
+		}
+		if driver.NeedsSudo() {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 func unmountEntries(ctx context.Context, mgr *drivers.Manager, entries []*config.MountEntry) (success, fail int) {
 	if len(entries) == 0 {
 		return 0, 0
@@ -220,8 +234,13 @@ func unmountEntries(ctx context.Context, mgr *drivers.Manager, entries []*config
 
 	fmt.Printf("Unmounting %d share(s)...\n", len(entries))
 
-	if err := interaction.EnsureSudoCached(); err != nil {
-		fmt.Fprintf(os.Stderr, "Warning: sudo authentication failed: %v\n", err)
+	needSudo, err := entriesNeedSudo(mgr, entries)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: failed to inspect mount privileges: %v\n", err)
+	} else if needSudo {
+		if err := interaction.EnsureSudoCached(); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: sudo authentication failed: %v\n", err)
+		}
 	}
 
 	for i, entry := range entries {

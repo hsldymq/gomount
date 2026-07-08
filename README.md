@@ -1,11 +1,11 @@
 # gomount
 
-A convenient CLI tool for managing SMB/CIFS, SSHFS, and WebDAV mounts on Linux systems with an interactive TUI.
+A convenient CLI tool for managing SMB/CIFS and SSHFS mounts on Linux and macOS systems with an interactive TUI.
 
 ## Features
 
 - **Simple Configuration**: Define all your mounts in a single YAML file
-- **Multiple Protocols**: Supports SMB/CIFS, SSHFS, and WebDAV
+- **Multiple Protocols**: Supports SMB/CIFS and SSHFS
 - **Interactive TUI**: Beautiful terminal UI for browsing and selecting shares
 - **Mount Status Tracking**: Check which shares are currently mounted
 - **Interactive Selection**: Easy selection for mount/unmount operations
@@ -40,28 +40,28 @@ sudo cp bin/gomount /usr/local/bin/
 
 ## Requirements
 
-- Linux operating system
-- `mount.cifs` command (install `cifs-utils` package) — for SMB mounts
+- Linux or macOS operating system
+- Linux: `mount.cifs` command (install `cifs-utils` package) — for SMB mounts
+- macOS: `mount_smbfs` command — for SMB mounts
 - `sshfs` command — for SSHFS mounts
-- `mount.davfs` command (install `davfs2` package) — for WebDAV mounts
-- `sudo` access for mount operations
+- Linux SMB mounts require `sudo` access
 - Go 1.25+ (for building from source)
 
 ### Install Dependencies
 
 On Debian/Ubuntu:
 ```bash
-sudo apt-get install cifs-utils sshfs davfs2
+sudo apt-get install cifs-utils sshfs
 ```
 
 On Fedora/RHEL:
 ```bash
-sudo dnf install cifs-utils fuse-sshfs davfs2
+sudo dnf install cifs-utils fuse-sshfs
 ```
 
 On Arch Linux:
 ```bash
-sudo pacman -S cifs-utils sshfs davfs2
+sudo pacman -S cifs-utils sshfs
 ```
 
 ## Configuration
@@ -90,14 +90,6 @@ mounts:
       remote_path: /home/user/projects
     mount_dir_path: /mnt/dev
 
-  # WebDAV mount
-  - name: cloud
-    type: webdav
-    webdav:
-      url: https://cloud.example.com/remote.php/dav/files/user/
-      username: user
-      # password: pass
-    mount_dir_path: /mnt/cloud
 ```
 
 You can generate a full example config with:
@@ -113,7 +105,7 @@ gomount config-example > ~/.config/gomount_config.yaml
 | Field | Required | Default | Description |
 |-------|----------|---------|-------------|
 | `name` | Yes | - | Unique identifier for this mount |
-| `type` | Yes | - | Mount type (`smb`, `sshfs`, `webdav`). |
+| `type` | Yes | - | Mount type (`smb`, `sshfs`). |
 | `mount_dir_path` | Yes | - | Full local path for the mount point. Supports `~` expansion. |
 
 #### SMB (`smb:` block)
@@ -132,14 +124,6 @@ gomount config-example > ~/.config/gomount_config.yaml
 |-------|----------|---------|-------------|
 | `sshfs.host` | Yes | - | SSH hostname or `~/.ssh/config` alias |
 | `sshfs.remote_path` | Yes | - | Remote directory path to mount |
-
-#### WebDAV (`webdav:` block)
-
-| Field | Required | Default | Description |
-|-------|----------|---------|-------------|
-| `webdav.url` | Yes | - | WebDAV server URL |
-| `webdav.username` | No | - | Login username |
-| `webdav.password` | No | - | Login password (prompts if empty) |
 
 ## Usage
 
@@ -291,7 +275,7 @@ gomount/
 ├── internal/
 │   ├── config/             # Configuration management
 │   ├── mount/              # Mount/umount operations
-│   ├── drivers/            # Protocol drivers (smb, sshfs, webdav)
+│   ├── drivers/            # Protocol drivers (smb, sshfs)
 │   ├── tui/                # Terminal UI components
 │   ├── interaction/        # Interactive prompts and sudo handling
 │   └── privilege/          # Sudo handling

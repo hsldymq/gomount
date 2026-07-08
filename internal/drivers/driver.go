@@ -11,7 +11,7 @@ import (
 // Driver 驱动接口，所有挂载驱动必须实现
 type Driver interface {
 	// Type 返回驱动类型标识
-	// 例如: "smb", "sshfs", "webdav"
+	// 例如: "smb", "sshfs"
 	Type() string
 
 	// Mount 执行挂载操作

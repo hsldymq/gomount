@@ -6,6 +6,9 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"strconv"
+	"strings"
+	"syscall"
 	"time"
 )
 
@@ -51,6 +54,7 @@ func Establish(ctx context.Context, jumpHost, remoteAddr string) (int, error) {
 		LocalPort:  localPort,
 		RemoteAddr: remoteAddr,
 		JumpHost:   jumpHost,
+		PID:        cmd.Process.Pid,
 	}
 	if err := saveRecord("_tunnel_"+fmt.Sprintf("%d", localPort), record); err != nil {
 		return 0, fmt.Errorf("failed to save tunnel state: %w", err)
@@ -77,6 +81,7 @@ func EstablishForMount(ctx context.Context, mountName, jumpHost, remoteAddr stri
 		LocalPort:  localPort,
 		RemoteAddr: remoteAddr,
 		JumpHost:   jumpHost,
+		PID:        localRecordPID(localPort),
 	}); err != nil {
 		return 0, err
 	}
@@ -93,7 +98,11 @@ func Teardown(mountName string) error {
 		return nil
 	}
 
-	killByPort(record.LocalPort)
+	if record.PID > 0 {
+		killByPID(record.PID)
+	} else {
+		killByPort(record.LocalPort)
+	}
 
 	if err := deleteRecord(mountName); err != nil {
 		return fmt.Errorf("failed to clean tunnel state: %w", err)
@@ -111,9 +120,52 @@ func isPortAlive(port int) bool {
 	return true
 }
 
+func localRecordPID(port int) int {
+	record, found, err := loadRecord("_tunnel_" + fmt.Sprintf("%d", port))
+	if err != nil || !found {
+		return 0
+	}
+	return record.PID
+}
+
+func killByPID(pid int) {
+	process, err := os.FindProcess(pid)
+	if err != nil {
+		return
+	}
+	_ = process.Signal(syscall.SIGTERM)
+}
+
 func killByPort(port int) {
-	cmd := exec.Command("fuser", "-k", fmt.Sprintf("%d/tcp", port))
-	cmd.Run()
+	pid := localRecordPID(port)
+	if pid > 0 {
+		killByPID(pid)
+		return
+	}
+
+	out, err := exec.Command("lsof", "-ti", fmt.Sprintf("tcp:%d", port)).Output()
+	if err != nil {
+		return
+	}
+	for _, pid := range parsePIDs(out) {
+		killByPID(pid)
+	}
+}
+
+func parsePIDs(out []byte) []int {
+	var pids []int
+	for _, line := range strings.Split(string(out), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		pid, err := strconv.Atoi(line)
+		if err != nil {
+			continue
+		}
+		pids = append(pids, pid)
+	}
+	return pids
 }
 
 func waitForPort(port int, timeout time.Duration) error {

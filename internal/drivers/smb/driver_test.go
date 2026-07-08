@@ -2,6 +2,7 @@ package smb
 
 import (
 	"os"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -75,6 +76,10 @@ func TestDriver_Validate(t *testing.T) {
 }
 
 func TestDriver_buildMountCommand(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("Linux-specific mount.cifs command test")
+	}
+
 	d := NewDriver()
 	entry := &config.MountEntry{
 		Name:         "test",
@@ -98,6 +103,22 @@ func TestDriver_buildMountCommand(t *testing.T) {
 	}
 	if !strings.Contains(argsStr, "/mnt/test") {
 		t.Error("expected mount path in args")
+	}
+}
+
+func TestDriver_buildUnmountCommand(t *testing.T) {
+	d := NewDriver()
+	entry := &config.MountEntry{MountDirPath: "/mnt/test"}
+
+	cmd := d.buildUnmountCommand(entry)
+	if cmd == nil {
+		t.Fatal("expected command, got nil")
+	}
+	if !strings.HasSuffix(cmd.Path, "umount") {
+		t.Errorf("expected path to end with 'umount', got '%s'", cmd.Path)
+	}
+	if strings.Join(cmd.Args, " ") != "umount /mnt/test" {
+		t.Errorf("unexpected args: %v", cmd.Args)
 	}
 }
 

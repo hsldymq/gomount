@@ -35,12 +35,6 @@ mounts:
       addr: build.company.local
       share_name: artifacts
       username: builder
-  # 代码审查服务器
-  - name: gerrit
-    type: webdav
-    webdav:
-      url: https://gerrit.company.com/dav
-      username: developer
 ```
 ## 典型工作流
 ### 1. 开始一天的工作
@@ -48,7 +42,6 @@ mounts:
 gomount mount dev-primary
 gomount mount dev-test
 gomount mount build-share
-gomount mount gerrit
 # 进入项目目录
 cd /mnt/dev/dev-primary/my-project
 # 开始编码...
@@ -70,7 +63,6 @@ scp /mnt/dev/build-share/latest/app.tar.gz dev-test:/var/www/test/
 gomount umount dev-primary
 gomount umount dev-test
 gomount umount build-share
-gomount umount gerrit
 ```
 ## VS Code 远程开发配合
 可以在 VS Code 中直接打开挂载的目录：

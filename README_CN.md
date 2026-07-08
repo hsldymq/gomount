@@ -1,11 +1,11 @@
 # gomount
 
-一个方便的 Linux 系统上管理 SMB/CIFS、SSHFS 和 WebDAV 挂载的命令行工具，提供交互式 TUI 界面。
+一个方便的 Linux 和 macOS 系统上管理 SMB/CIFS、SSHFS 挂载的命令行工具，提供交互式 TUI 界面。
 
 ## 特性
 
 - **简单配置**：在单个 YAML 文件中定义所有挂载
-- **多协议支持**：支持 SMB/CIFS、SSHFS 和 WebDAV
+- **多协议支持**：支持 SMB/CIFS 和 SSHFS
 - **交互式 TUI**：美观的终端界面用于浏览和选择共享
 - **挂载状态跟踪**：查看当前已挂载的共享
 - **交互式选择**：轻松选择挂载/卸载操作
@@ -40,28 +40,28 @@ sudo cp bin/gomount /usr/local/bin/
 
 ## 系统要求
 
-- Linux 操作系统
-- `mount.cifs` 命令（需安装 `cifs-utils` 软件包）— 用于 SMB 挂载
+- Linux 或 macOS 操作系统
+- Linux：`mount.cifs` 命令（需安装 `cifs-utils` 软件包）— 用于 SMB 挂载
+- macOS：`mount_smbfs` 命令 — 用于 SMB 挂载
 - `sshfs` 命令 — 用于 SSHFS 挂载
-- `mount.davfs` 命令（需安装 `davfs2` 软件包）— 用于 WebDAV 挂载
-- 挂载操作需要 `sudo` 权限
+- Linux SMB 挂载需要 `sudo` 权限
 - Go 1.25+ （从源码构建时需要）
 
 ### 安装依赖
 
 在 Debian/Ubuntu 上：
 ```bash
-sudo apt-get install cifs-utils sshfs davfs2
+sudo apt-get install cifs-utils sshfs
 ```
 
 在 Fedora/RHEL 上：
 ```bash
-sudo dnf install cifs-utils fuse-sshfs davfs2
+sudo dnf install cifs-utils fuse-sshfs
 ```
 
 在 Arch Linux 上：
 ```bash
-sudo pacman -S cifs-utils sshfs davfs2
+sudo pacman -S cifs-utils sshfs
 ```
 
 ## 配置
@@ -90,14 +90,6 @@ mounts:
       remote_path: /home/user/projects
     mount_dir_path: /mnt/dev
 
-  # WebDAV 挂载
-  - name: cloud
-    type: webdav
-    webdav:
-      url: https://cloud.example.com/remote.php/dav/files/user/
-      username: user
-      # password: pass
-    mount_dir_path: /mnt/cloud
 ```
 
 可以使用以下命令生成完整的配置文件示例：
@@ -113,7 +105,7 @@ gomount config-example > ~/.config/gomount_config.yaml
 | 字段 | 必需 | 默认值 | 描述 |
 |-----|------|--------|------|
 | `name` | 是 | - | 此挂载的唯一标识符 |
-| `type` | 是 | - | 挂载类型（`smb`、`sshfs`、`webdav`）。 |
+| `type` | 是 | - | 挂载类型（`smb`、`sshfs`）。 |
 | `mount_dir_path` | 是 | - | 挂载点的完整本地路径。支持 `~` 展开。 |
 
 #### SMB（`smb:` 块）
@@ -132,14 +124,6 @@ gomount config-example > ~/.config/gomount_config.yaml
 |-----|------|--------|------|
 | `sshfs.host` | 是 | - | SSH 主机名或 `~/.ssh/config` 别名 |
 | `sshfs.remote_path` | 是 | - | 要挂载的远程目录路径 |
-
-#### WebDAV（`webdav:` 块）
-
-| 字段 | 必需 | 默认值 | 描述 |
-|-----|------|--------|------|
-| `webdav.url` | 是 | - | WebDAV 服务器 URL |
-| `webdav.username` | 否 | - | 登录用户名 |
-| `webdav.password` | 否 | - | 登录密码（为空时提示输入） |
 
 ## 使用方法
 
@@ -291,7 +275,7 @@ gomount/
 ├── internal/
 │   ├── config/             # 配置管理
 │   ├── mount/              # 挂载/卸载操作
-│   ├── drivers/            # 协议驱动（smb、sshfs、webdav）
+│   ├── drivers/            # 协议驱动（smb、sshfs）
 │   ├── tui/                # 终端 UI 组件
 │   ├── interaction/        # 交互式提示和 Sudo 处理
 │   └── privilege/          # Sudo 处理

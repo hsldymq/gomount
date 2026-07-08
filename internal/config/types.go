@@ -36,9 +36,8 @@ type MountEntry struct {
 	Type         string `yaml:"type" mapstructure:"type" validate:"required"`
 	MountDirPath string `yaml:"mount_dir_path" mapstructure:"mount_dir_path" validate:"required"`
 
-	SMB    *SMBConfig    `yaml:"smb,omitempty" mapstructure:"smb"`
-	SSHFS  *SSHFSConfig  `yaml:"sshfs,omitempty" mapstructure:"sshfs"`
-	WebDAV *WebDAVConfig `yaml:"webdav,omitempty" mapstructure:"webdav"`
+	SMB   *SMBConfig   `yaml:"smb,omitempty" mapstructure:"smb"`
+	SSHFS *SSHFSConfig `yaml:"sshfs,omitempty" mapstructure:"sshfs"`
 
 	SSHTunnel *SSHTunnelConfig `yaml:"ssh_tunnel,omitempty" mapstructure:"ssh_tunnel"`
 
@@ -59,13 +58,6 @@ type SMBConfig struct {
 type SSHFSConfig struct {
 	Host       string `yaml:"host" mapstructure:"host" validate:"required"`
 	RemotePath string `yaml:"remote_path" mapstructure:"remote_path" validate:"required"`
-}
-
-// WebDAVConfig WebDAV配置
-type WebDAVConfig struct {
-	URL      string `yaml:"url" mapstructure:"url" validate:"required,url"`
-	Username string `yaml:"username,omitempty" mapstructure:"username"`
-	Password string `yaml:"password,omitempty" mapstructure:"password"`
 }
 
 type SSHTunnelConfig struct {
@@ -104,10 +96,6 @@ func (m *MountEntry) ValidateDriverConfig() error {
 	case "sshfs":
 		if m.SSHFS == nil {
 			return fmt.Errorf("mount entry '%s': type is 'sshfs' but 'sshfs' config is missing", m.Name)
-		}
-	case "webdav":
-		if m.WebDAV == nil {
-			return fmt.Errorf("mount entry '%s': type is 'webdav' but 'webdav' config is missing", m.Name)
 		}
 	default:
 		return fmt.Errorf("mount entry '%s': unknown type '%s'", m.Name, m.Type)

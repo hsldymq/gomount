@@ -14,8 +14,6 @@ func entryAddr(entry config.MountEntry) string {
 		return fmt.Sprintf("//%s:%d/%s", entry.SMB.Addr, entry.SMB.GetPort(), entry.SMB.ShareName)
 	case entry.SSHFS != nil:
 		return fmt.Sprintf("%s:%s", entry.SSHFS.Host, entry.SSHFS.RemotePath)
-	case entry.WebDAV != nil:
-		return entry.WebDAV.URL
 	}
 	return ""
 }

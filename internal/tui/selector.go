@@ -246,8 +246,6 @@ func entrySegments(entry config.MountEntry) []lineSegment {
 		addrInfo = fmt.Sprintf("//%s:%d/%s", entry.SMB.Addr, entry.SMB.GetPort(), entry.SMB.ShareName)
 	case entry.SSHFS != nil:
 		addrInfo = fmt.Sprintf("%s:%s", entry.SSHFS.Host, entry.SSHFS.RemotePath)
-	case entry.WebDAV != nil:
-		addrInfo = entry.WebDAV.URL
 	}
 
 	typeLabel := fmt.Sprintf("(%s)", entry.Type)

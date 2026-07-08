@@ -1,6 +1,7 @@
 package config
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -67,5 +68,20 @@ func TestMountEntry_HasPassword(t *testing.T) {
 				t.Errorf("HasPassword() = %v, want %v", got, tt.expected)
 			}
 		})
+	}
+}
+
+func TestMountEntry_ValidateDriverConfigRejectsWebDAV(t *testing.T) {
+	entry := MountEntry{
+		Name: "cloud",
+		Type: "webdav",
+	}
+
+	err := entry.ValidateDriverConfig()
+	if err == nil {
+		t.Fatal("expected webdav to be rejected")
+	}
+	if !strings.Contains(err.Error(), "unknown type 'webdav'") {
+		t.Fatalf("expected unknown type error, got %v", err)
 	}
 }

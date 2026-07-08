@@ -11,6 +11,7 @@ type TunnelRecord struct {
 	LocalPort  int    `json:"local_port"`
 	RemoteAddr string `json:"remote_addr"`
 	JumpHost   string `json:"jump_host"`
+	PID        int    `json:"pid"`
 }
 
 var (

@@ -35,15 +35,6 @@ mounts:
   #     host: bastion.example.com  # 跳板机（走 ~/.ssh/config）
   #   mount_dir_path: /mnt/remote-nas
 
-  # WebDAV 挂载
-  # - name: cloud
-  #   type: webdav
-  #   webdav:
-  #     url: https://cloud.example.com/remote.php/dav/files/user/
-  #     username: user
-  #     # password: pass
-  #   mount_dir_path: /mnt/cloud
-
   # 引用其他配置文件 (支持 ~, 相对路径, glob)
   # include:
   #   - ~/Sync/gomount.d/*.yaml     # 从同步盘引用

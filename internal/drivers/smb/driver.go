@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"os/exec"
 
 	"github.com/hsldymq/gomount/internal/config"
 	"github.com/hsldymq/gomount/internal/drivers"
@@ -21,10 +20,6 @@ func NewDriver() *Driver {
 
 func (d *Driver) Type() string {
 	return "smb"
-}
-
-func (d *Driver) NeedsSudo() bool {
-	return true
 }
 
 func (d *Driver) Mount(ctx context.Context, entry *config.MountEntry) error {
@@ -85,7 +80,7 @@ func (d *Driver) Mount(ctx context.Context, entry *config.MountEntry) error {
 
 	cmd := d.buildMountCommand(entry, credsFile, smbAddr, smbPort)
 
-	if interaction.NeedsPrivilege() {
+	if d.NeedsSudo() && interaction.NeedsPrivilege() {
 		cmd, err = interaction.WrapWithSudo(cmd)
 		if err != nil {
 			return &drivers.DriverError{
@@ -113,10 +108,10 @@ func (d *Driver) Mount(ctx context.Context, entry *config.MountEntry) error {
 }
 
 func (d *Driver) Unmount(ctx context.Context, entry *config.MountEntry) error {
-	cmd := exec.CommandContext(ctx, "umount", entry.MountDirPath)
+	cmd := d.buildUnmountCommand(entry)
 
 	var err error
-	if interaction.NeedsPrivilege() {
+	if d.NeedsSudo() && interaction.NeedsPrivilege() {
 		cmd, err = interaction.WrapWithSudo(cmd)
 		if err != nil {
 			return &drivers.DriverError{
@@ -213,23 +208,4 @@ func (d *Driver) createCredentialFile(entry *config.MountEntry) (string, error) 
 	}
 
 	return tmpFile.Name(), nil
-}
-
-func (d *Driver) buildMountCommand(entry *config.MountEntry, credsFile, addr string, port int) *exec.Cmd {
-	smbAddr := fmt.Sprintf("//%s/%s", addr, entry.SMB.ShareName)
-
-	options := fmt.Sprintf("credentials=%s,port=%d,file_mode=0755,dir_mode=0755,uid=%d,gid=%d",
-		credsFile,
-		port,
-		os.Getuid(),
-		os.Getgid(),
-	)
-
-	args := []string{
-		smbAddr,
-		entry.MountDirPath,
-		"-o", options,
-	}
-
-	return exec.Command("mount.cifs", args...)
 }

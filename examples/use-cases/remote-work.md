@@ -3,7 +3,6 @@
 ## 需求
 - 访问公司文件服务器（SMB）
 - 连接开发服务器（SSHFS）
-- 访问内部文档系统（WebDAV）
 ## 完整配置
 ```yaml
 mounts:
@@ -30,12 +29,6 @@ mounts:
       remote_path: /home/$USER/workspace
     options:
       cache_timeout: 600
-  # 文档系统（Confluence/SharePoint via WebDAV）
-  - name: wiki
-    type: webdav
-    webdav:
-      url: https://wiki.company.com/dav
-      username: $USER
 ```
 ## 每日工作流
 ```bash
@@ -43,7 +36,6 @@ mounts:
 gomount mount corp-files
 gomount mount dept-storage
 gomount mount dev-box
-gomount mount wiki
 # 查看挂载状态
 gomount list
 # ... 工作一整天 ...
@@ -51,7 +43,6 @@ gomount list
 gomount umount corp-files
 gomount umount dept-storage
 gomount umount dev-box
-gomount umount wiki
 ```
 ## 通过跳板机访问（适用于无 VPN）
 如果公司没有 VPN，但有跳板机，在 `~/.ssh/config` 中配置 ProxyJump 即可：
