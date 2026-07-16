@@ -49,6 +49,90 @@ func TestLoadConfig_EmptyConfig(t *testing.T) {
 	if len(cfg.Mounts) != 0 {
 		t.Errorf("expected 0 mounts, got %d", len(cfg.Mounts))
 	}
+	if cfg.Daemon == nil {
+		t.Fatal("expected daemon defaults")
+	}
+	if cfg.Daemon.GetLogTarget() != "syslog" {
+		t.Fatalf("expected default daemon log target syslog, got %q", cfg.Daemon.GetLogTarget())
+	}
+}
+
+func TestLoadConfig_DaemonLogTargetSyslog(t *testing.T) {
+	dir := t.TempDir()
+	path := writeTestFile(t, dir, "config.yaml", `
+daemon:
+  log_target: syslog
+`)
+	cfg, err := LoadConfig(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Daemon.GetLogTarget() != "syslog" {
+		t.Fatalf("expected daemon log target syslog, got %q", cfg.Daemon.GetLogTarget())
+	}
+}
+
+func TestLoadConfig_DaemonLogTargetStderr(t *testing.T) {
+	dir := t.TempDir()
+	path := writeTestFile(t, dir, "config.yaml", `
+daemon:
+  log_target: stderr
+`)
+	cfg, err := LoadConfig(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Daemon.GetLogTarget() != "stderr" {
+		t.Fatalf("expected daemon log target stderr, got %q", cfg.Daemon.GetLogTarget())
+	}
+}
+
+func TestLoadConfig_NormalizesDaemonLogFile(t *testing.T) {
+	dir := t.TempDir()
+	path := writeTestFile(t, dir, "config.yaml", `
+daemon:
+  log_file: ~/gomount-daemon-test.log
+`)
+	cfg, err := LoadConfig(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Daemon.LogFile == "~/gomount-daemon-test.log" {
+		t.Fatal("expected daemon log_file to be expanded")
+	}
+	if !filepath.IsAbs(cfg.Daemon.LogFile) {
+		t.Fatalf("expected absolute daemon log_file, got %q", cfg.Daemon.LogFile)
+	}
+}
+
+func TestLoadConfig_NormalizesDaemonSocketPath(t *testing.T) {
+	dir := t.TempDir()
+	path := writeTestFile(t, dir, "config.yaml", `
+daemon:
+  socket_path: ~/gomount-test.sock
+`)
+	cfg, err := LoadConfig(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Daemon.SocketPath == "~/gomount-test.sock" {
+		t.Fatal("expected daemon socket_path to be expanded")
+	}
+	if !filepath.IsAbs(cfg.Daemon.SocketPath) {
+		t.Fatalf("expected absolute daemon socket_path, got %q", cfg.Daemon.SocketPath)
+	}
+}
+
+func TestLoadConfig_RejectsInvalidDaemonLogTarget(t *testing.T) {
+	dir := t.TempDir()
+	path := writeTestFile(t, dir, "config.yaml", `
+daemon:
+  log_target: system
+`)
+	_, err := LoadConfig(path)
+	if err == nil {
+		t.Fatal("expected invalid daemon log target to fail")
+	}
 }
 
 func TestLoadConfig_IncludeSingleFile(t *testing.T) {

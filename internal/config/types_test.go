@@ -71,17 +71,53 @@ func TestMountEntry_HasPassword(t *testing.T) {
 	}
 }
 
-func TestMountEntry_ValidateDriverConfigRejectsWebDAV(t *testing.T) {
+func TestMountEntry_ValidateDriverConfigAcceptsWebDAVURL(t *testing.T) {
 	entry := MountEntry{
 		Name: "cloud",
 		Type: "webdav",
+		WebDAV: &WebDAVConfig{
+			URL:      "https://cloud.example.com/dav",
+			Username: "user",
+			Password: "pass",
+			Path:     "/docs",
+		},
+	}
+
+	if err := entry.ValidateDriverConfig(); err != nil {
+		t.Fatalf("expected webdav url config to be accepted, got %v", err)
+	}
+}
+
+func TestMountEntry_ValidateDriverConfigRejectsWebDAVWithoutURL(t *testing.T) {
+	entry := MountEntry{
+		Name:   "cloud",
+		Type:   "webdav",
+		WebDAV: &WebDAVConfig{Path: "/docs"},
 	}
 
 	err := entry.ValidateDriverConfig()
 	if err == nil {
-		t.Fatal("expected webdav to be rejected")
+		t.Fatal("expected webdav without url to be rejected")
 	}
-	if !strings.Contains(err.Error(), "unknown type 'webdav'") {
-		t.Fatalf("expected unknown type error, got %v", err)
+	if !strings.Contains(err.Error(), "webdav.url is required") {
+		t.Fatalf("expected missing url error, got %v", err)
+	}
+}
+
+func TestMountEntry_ValidateDriverConfigRejectsWebDAVURLUserinfo(t *testing.T) {
+	entry := MountEntry{
+		Name: "cloud",
+		Type: "webdav",
+		WebDAV: &WebDAVConfig{
+			URL: "https://user:secret@cloud.example.com/dav",
+		},
+	}
+
+	err := entry.ValidateDriverConfig()
+	if err == nil {
+		t.Fatal("expected webdav url with userinfo to be rejected")
+	}
+	if !strings.Contains(err.Error(), "webdav.url must not include credentials") {
+		t.Fatalf("expected userinfo error, got %v", err)
 	}
 }

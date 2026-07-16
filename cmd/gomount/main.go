@@ -5,18 +5,26 @@ import (
 	_ "embed"
 	"errors"
 	"fmt"
+	"io"
+	"log/slog"
+	"log/syslog"
+	"net/url"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/hsldymq/gomount/internal/config"
+	"github.com/hsldymq/gomount/internal/daemon"
+	"github.com/hsldymq/gomount/internal/daemonapi"
 	"github.com/hsldymq/gomount/internal/drivers"
 	smbDriver "github.com/hsldymq/gomount/internal/drivers/smb"
 	sshfsDriver "github.com/hsldymq/gomount/internal/drivers/sshfs"
 	"github.com/hsldymq/gomount/internal/interaction"
-	"github.com/hsldymq/gomount/internal/status"
 	"github.com/hsldymq/gomount/internal/tui"
+	rclonelog "github.com/rclone/rclone/fs/log"
 	"github.com/spf13/cobra"
 )
 
@@ -28,6 +36,10 @@ var (
 	usageTemplate string
 
 	configPath string
+
+	daemonLogTarget      string
+	daemonLogFile        string
+	daemonSocketPathFlag string
 )
 
 var rootCmd = &cobra.Command{
@@ -78,11 +90,35 @@ var umountCmd = &cobra.Command{
 	RunE:    runUmount,
 }
 
+var daemonCmd = &cobra.Command{
+	Use:     "daemon",
+	Aliases: []string{"d"},
+	Short:   "管理 gomount daemon",
+}
+
+var daemonRunCmd = &cobra.Command{
+	Use:    "run",
+	Hidden: true,
+	RunE:   runDaemon,
+}
+
+var daemonStatusCmd = &cobra.Command{
+	Use:   "status",
+	Short: "显示 daemon 状态",
+	RunE:  runDaemonStatus,
+}
+
+var daemonDownCmd = &cobra.Command{
+	Use:   "down",
+	Short: "停止 daemon",
+	RunE:  runDaemonDown,
+}
+
 var mkdirDryRun bool
 
 var mkdirCmd = &cobra.Command{
 	Use:     "mkdir [name...]",
-	Aliases: []string{"d"},
+	Aliases: []string{"r"},
 	Short:   "创建挂载目录",
 	Long: `根据配置文件创建所有挂载条目的目录。
 可指定名称创建，或不指定/使用 "*" 创建全部。
@@ -104,11 +140,18 @@ var configExampleCmd = &cobra.Command{
 func init() {
 	rootCmd.PersistentFlags().StringVarP(&configPath, "config", "c", "",
 		fmt.Sprintf("配置文件路径 (默认: %s)", config.DefaultConfigPath()))
+	daemonRunCmd.Flags().StringVar(&daemonLogTarget, "log-target", "syslog", "daemon log target: syslog, file, or stderr")
+	daemonRunCmd.Flags().StringVar(&daemonLogFile, "log-file", "", "daemon log file path when --log-target=file")
+	daemonRunCmd.Flags().StringVar(&daemonSocketPathFlag, "socket-path", "", "daemon unix socket path")
 
 	rootCmd.AddCommand(listCmd)
 	rootCmd.AddCommand(interactiveCmd)
 	rootCmd.AddCommand(mountCmd)
 	rootCmd.AddCommand(umountCmd)
+	daemonCmd.AddCommand(daemonRunCmd)
+	daemonCmd.AddCommand(daemonStatusCmd)
+	daemonCmd.AddCommand(daemonDownCmd)
+	rootCmd.AddCommand(daemonCmd)
 	mkdirCmd.Flags().BoolVar(&mkdirDryRun, "dry-run", false, "仅预览将要执行的操作")
 	rootCmd.AddCommand(mkdirCmd)
 	rootCmd.AddCommand(configExampleCmd)
@@ -156,7 +199,8 @@ func runList(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	if err := status.RefreshAllStatus(cfg); err != nil {
+	mgr := createDriverManager(cfg)
+	if err := refreshAllStatus(context.Background(), mgr, cfg); err != nil {
 		fmt.Fprintf(os.Stderr, "Warning: failed to refresh mount status: %v\n", err)
 	}
 
@@ -164,6 +208,80 @@ func runList(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to display list: %w", err)
 	}
 
+	return nil
+}
+
+func runDaemon(cmd *cobra.Command, args []string) error {
+	cleanupLogs, err := configureDaemonLogging(daemonLogTarget, daemonLogFile, os.Stderr)
+	if err != nil {
+		return err
+	}
+	defer cleanupLogs()
+
+	socketPath, err := daemonSocketPathFromValue(daemonSocketPathFlag)
+	if err != nil {
+		return err
+	}
+	ctx, cancel := context.WithCancel(cmd.Context())
+	defer cancel()
+	server := daemon.NewServerWithShutdown(daemon.NewSessionManager(nil), cancel)
+	err = daemon.Run(ctx, socketPath, server)
+	if err != nil {
+		logDaemonLine("ERROR : daemon stopped: " + err.Error())
+	}
+	return err
+}
+
+func runDaemonStatus(cmd *cobra.Command, args []string) error {
+	cfg, err := config.LoadConfig(configPath)
+	if err != nil {
+		return err
+	}
+	socketPath, err := daemonSocketPath(cfg)
+	if err != nil {
+		return err
+	}
+	client := daemon.NewClient(socketPath)
+	health, err := client.Health(cmd.Context())
+	if err != nil {
+		fmt.Fprintln(cmd.OutOrStdout(), "daemon: not running")
+		fmt.Fprintf(cmd.OutOrStdout(), "socket: %s\n", socketPath)
+		return nil
+	}
+	fmt.Fprintln(cmd.OutOrStdout(), "daemon: running")
+	fmt.Fprintf(cmd.OutOrStdout(), "pid: %d\n", health.PID)
+	fmt.Fprintf(cmd.OutOrStdout(), "socket: %s\n", socketPath)
+	fmt.Fprintf(cmd.OutOrStdout(), "managed_types: %s\n", strings.Join(health.ManagedTypes, ","))
+	fmt.Fprintf(cmd.OutOrStdout(), "mounted_sessions: %d\n", health.MountedSessions)
+	return nil
+}
+
+func runDaemonDown(cmd *cobra.Command, args []string) error {
+	cfg, err := config.LoadConfig(configPath)
+	if err != nil {
+		return err
+	}
+	socketPath, err := daemonSocketPath(cfg)
+	if err != nil {
+		return err
+	}
+	client := daemon.NewClient(socketPath)
+	if _, err := client.Health(cmd.Context()); err != nil {
+		fmt.Fprintln(cmd.OutOrStdout(), "daemon: not running")
+		return nil
+	}
+	fmt.Fprintln(cmd.OutOrStdout(), "daemon: stopping")
+	resp, err := client.Shutdown(cmd.Context())
+	if err != nil {
+		return err
+	}
+	if !resp.OK {
+		for _, shutdownErr := range resp.Errors {
+			fmt.Fprintf(cmd.ErrOrStderr(), "ERROR: failed to unmount %s: %s\n", shutdownErr.Name, shutdownErr.Message)
+		}
+		return fmt.Errorf("daemon shutdown failed")
+	}
+	fmt.Fprintln(cmd.OutOrStdout(), "daemon: stopped")
 	return nil
 }
 
@@ -192,12 +310,7 @@ func mountEntries(ctx context.Context, mgr *drivers.Manager, entries []*config.M
 			continue
 		}
 
-		switch entry.Type {
-		case "smb":
-			fmt.Printf("    From: //%s:%d/%s\n", entry.SMB.Addr, entry.SMB.GetPort(), entry.SMB.ShareName)
-		case "sshfs":
-			fmt.Printf("    From: %s:%s\n", entry.SSHFS.Host, entry.SSHFS.RemotePath)
-		}
+		fmt.Printf("    From: %s\n", entrySource(entry))
 		fmt.Printf("    To: %s\n", entry.MountDirPath)
 
 		if err := mgr.Mount(ctx, entry.Name); err != nil {
@@ -214,8 +327,63 @@ func mountEntries(ctx context.Context, mgr *drivers.Manager, entries []*config.M
 	return
 }
 
+func mountDaemonEntries(ctx context.Context, cfg *config.Config, entries []*config.MountEntry) (success, fail int) {
+	if len(entries) == 0 {
+		return 0, 0
+	}
+	client, err := ensureDaemonClient(ctx, cfg)
+	if err != nil {
+		for _, entry := range entries {
+			fmt.Printf("  %s\n", entry.Name)
+			fmt.Fprintf(os.Stderr, "    ERROR: failed to start daemon: %v\n", err)
+			fail++
+		}
+		return success, fail
+	}
+	snapshots := snapshotsFromEntries(entriesWithPasswords, entries)
+	resp, err := client.Mount(ctx, snapshots)
+	if err != nil {
+		for _, entry := range entries {
+			fmt.Printf("  %s\n", entry.Name)
+			fmt.Fprintf(os.Stderr, "    ERROR: daemon mount request failed: %v\n", err)
+			fail++
+		}
+		return success, fail
+	}
+	return printDaemonResults(entries, resp.Results, "mounted")
+}
+
+func unmountDaemonEntries(ctx context.Context, cfg *config.Config, entries []*config.MountEntry) (success, fail int) {
+	if len(entries) == 0 {
+		return 0, 0
+	}
+	client, err := ensureDaemonClient(ctx, cfg)
+	if err != nil {
+		for _, entry := range entries {
+			fmt.Printf("  %s\n", entry.Name)
+			fmt.Fprintf(os.Stderr, "    ERROR: failed to start daemon: %v\n", err)
+			fail++
+		}
+		return success, fail
+	}
+	snapshots := snapshotsFromEntries(entriesWithoutPasswords, entries)
+	resp, err := client.Unmount(ctx, snapshots)
+	if err != nil {
+		for _, entry := range entries {
+			fmt.Printf("  %s\n", entry.Name)
+			fmt.Fprintf(os.Stderr, "    ERROR: daemon unmount request failed: %v\n", err)
+			fail++
+		}
+		return success, fail
+	}
+	return printDaemonResults(entries, resp.Results, "unmounted")
+}
+
 func entriesNeedSudo(mgr *drivers.Manager, entries []*config.MountEntry) (bool, error) {
 	for _, entry := range entries {
+		if isDaemonManagedEntry(entry) {
+			continue
+		}
 		driver, err := mgr.DetectDriver(entry)
 		if err != nil {
 			return false, err
@@ -225,6 +393,365 @@ func entriesNeedSudo(mgr *drivers.Manager, entries []*config.MountEntry) (bool, 
 		}
 	}
 	return false, nil
+}
+
+func isDaemonManagedEntry(entry *config.MountEntry) bool {
+	return entry != nil && entry.Type == "webdav"
+}
+
+func splitDaemonManagedEntries(entries []*config.MountEntry) (local, managed []*config.MountEntry) {
+	for _, entry := range entries {
+		if isDaemonManagedEntry(entry) {
+			managed = append(managed, entry)
+			continue
+		}
+		local = append(local, entry)
+	}
+	return local, managed
+}
+
+func entrySource(entry *config.MountEntry) string {
+	switch entry.Type {
+	case "smb":
+		return fmt.Sprintf("//%s:%d/%s", entry.SMB.Addr, entry.SMB.GetPort(), entry.SMB.ShareName)
+	case "sshfs":
+		return fmt.Sprintf("%s:%s", entry.SSHFS.Host, entry.SSHFS.RemotePath)
+	case "webdav":
+		if entry.WebDAV == nil {
+			return ""
+		}
+		return webdavSource(entry.WebDAV.URL, entry.WebDAV.Path)
+	default:
+		return ""
+	}
+}
+
+func webdavSource(rawURL, path string) string {
+	rawURL = redactURLUserinfo(rawURL)
+	if path == "" {
+		return rawURL
+	}
+	return rawURL + ":" + path
+}
+
+func redactURLUserinfo(rawURL string) string {
+	parsed, err := url.Parse(rawURL)
+	if err != nil || parsed.User == nil {
+		return rawURL
+	}
+	parsed.User = url.User("xxxxx")
+	return parsed.String()
+}
+
+type daemonClient interface {
+	Health(ctx context.Context) (*daemonapi.HealthResponse, error)
+	Mount(ctx context.Context, entries []daemonapi.EntrySnapshot) (*daemonapi.BatchResponse, error)
+	Unmount(ctx context.Context, entries []daemonapi.EntrySnapshot) (*daemonapi.BatchResponse, error)
+	Status(ctx context.Context, entries []daemonapi.EntrySnapshot) (*daemonapi.StatusResponse, error)
+}
+
+func newDaemonClient(cfg *config.Config) (daemonClient, error) {
+	socketPath, err := daemonSocketPath(cfg)
+	if err != nil {
+		return nil, err
+	}
+	return daemon.NewClient(socketPath), nil
+}
+
+func ensureDaemonClient(ctx context.Context, cfg *config.Config) (daemonClient, error) {
+	client, err := newDaemonClient(cfg)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := client.Health(ctx); err == nil {
+		return client, nil
+	}
+	if err := startDaemonProcess(cfg); err != nil {
+		return nil, err
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		if _, err := client.Health(ctx); err == nil {
+			return client, nil
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	return nil, fmt.Errorf("daemon did not become ready")
+}
+
+func startDaemonProcess(cfg *config.Config) error {
+	exe, err := os.Executable()
+	if err != nil {
+		return err
+	}
+	cmd, cleanup, err := prepareDaemonCommand(exe, cfg, os.Stdout, os.Stderr)
+	if err != nil {
+		return err
+	}
+	if err := cmd.Start(); err != nil {
+		cleanup()
+		return err
+	}
+	cleanup()
+	return nil
+}
+
+func daemonSocketPath(cfg *config.Config) (string, error) {
+	if cfg != nil && cfg.Daemon != nil && cfg.Daemon.SocketPath != "" {
+		return cfg.Daemon.SocketPath, nil
+	}
+	return daemon.DefaultSocketPath()
+}
+
+func daemonSocketPathFromValue(socketPath string) (string, error) {
+	if socketPath != "" {
+		return socketPath, nil
+	}
+	return daemon.DefaultSocketPath()
+}
+
+func prepareDaemonCommand(exe string, cfg *config.Config, stdout, stderr io.Writer) (*exec.Cmd, func(), error) {
+	cmd := exec.Command(exe, "daemon", "run")
+	cmd.Stdin = nil
+	cleanup := func() {}
+	logTarget := "syslog"
+	logFile := ""
+	if cfg != nil && cfg.Daemon != nil {
+		logTarget = cfg.Daemon.GetLogTarget()
+		logFile = cfg.Daemon.LogFile
+	}
+	socketPath, err := daemonSocketPath(cfg)
+	if err != nil {
+		return nil, cleanup, err
+	}
+	cmd.Args = append(cmd.Args, "--socket-path="+socketPath)
+	cmd.Args = append(cmd.Args, "--log-target="+logTarget)
+	switch logTarget {
+	case "stderr", "syslog":
+		cmd.Stdout = stdout
+		cmd.Stderr = stderr
+	case "file":
+		if logFile == "" {
+			var err error
+			logFile, err = daemon.DefaultLogPath()
+			if err != nil {
+				return nil, cleanup, err
+			}
+		}
+		if err := os.MkdirAll(filepath.Dir(logFile), 0755); err != nil {
+			return nil, cleanup, err
+		}
+		f, err := os.OpenFile(logFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0600)
+		if err != nil {
+			return nil, cleanup, err
+		}
+		cmd.Args = append(cmd.Args, "--log-file="+logFile)
+		cmd.Stdout = f
+		cmd.Stderr = f
+		cleanup = func() { _ = f.Close() }
+	default:
+		return nil, cleanup, fmt.Errorf("unsupported daemon log target %q", logTarget)
+	}
+	return cmd, cleanup, nil
+}
+
+type syslogLogger interface {
+	Err(string) error
+	Warning(string) error
+	Notice(string) error
+	Info(string) error
+	Debug(string) error
+	Close() error
+}
+
+var openSyslog = func() (syslogLogger, error) {
+	return syslog.New(syslog.LOG_DAEMON|syslog.LOG_INFO, "gomount-daemon")
+}
+
+var daemonLogOutput func(slog.Level, string)
+
+func configureDaemonLogging(logTarget, logFile string, stderr io.Writer) (func(), error) {
+	if logTarget == "" {
+		logTarget = "syslog"
+	}
+	switch logTarget {
+	case "stderr":
+		daemonLogOutput = nil
+		return func() {}, nil
+	case "file":
+		if logFile == "" {
+			var err error
+			logFile, err = daemon.DefaultLogPath()
+			if err != nil {
+				return nil, err
+			}
+		}
+		if err := os.MkdirAll(filepath.Dir(logFile), 0755); err != nil {
+			return nil, err
+		}
+		f, err := os.OpenFile(logFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0600)
+		if err != nil {
+			return nil, err
+		}
+		daemonLogOutput = func(_ slog.Level, text string) { _, _ = f.WriteString(text) }
+		rclonelog.Handler.SetOutput(daemonLogOutput)
+		return func() {
+			rclonelog.Handler.ResetOutput()
+			daemonLogOutput = nil
+			_ = f.Close()
+		}, nil
+	case "syslog":
+		writer, err := openSyslog()
+		if err != nil {
+			fmt.Fprintf(stderr, "gomount daemon: syslog unavailable, falling back to stderr: %v\n", err)
+			daemonLogOutput = nil
+			return func() {}, nil
+		}
+		daemonLogOutput = func(level slog.Level, text string) { writeSyslogLine(writer, level, text) }
+		rclonelog.Handler.SetOutput(daemonLogOutput)
+		return func() {
+			rclonelog.Handler.ResetOutput()
+			daemonLogOutput = nil
+			_ = writer.Close()
+		}, nil
+	default:
+		return nil, fmt.Errorf("unsupported daemon log target %q", logTarget)
+	}
+}
+
+func logDaemonLine(text string) {
+	level := slog.LevelInfo
+	if strings.Contains(text, "ERROR") {
+		level = slog.LevelError
+	} else if strings.Contains(text, "WARNING") {
+		level = slog.LevelWarn
+	} else if strings.Contains(text, "DEBUG") {
+		level = slog.LevelDebug
+	}
+	if daemonLogOutput != nil {
+		daemonLogOutput(level, text)
+	}
+}
+
+func writeSyslogLine(writer syslogLogger, level slog.Level, text string) {
+	switch {
+	case level >= slog.LevelError:
+		_ = writer.Err(text)
+	case level >= slog.LevelWarn:
+		_ = writer.Warning(text)
+	case level <= slog.LevelDebug:
+		_ = writer.Debug(text)
+	default:
+		if strings.Contains(text, "NOTICE") {
+			_ = writer.Notice(text)
+			return
+		}
+		_ = writer.Info(text)
+	}
+}
+
+type snapshotPasswordMode bool
+
+const (
+	entriesWithoutPasswords snapshotPasswordMode = false
+	entriesWithPasswords    snapshotPasswordMode = true
+)
+
+func snapshotsFromEntries(passwordMode snapshotPasswordMode, entries []*config.MountEntry) []daemonapi.EntrySnapshot {
+	snapshots := make([]daemonapi.EntrySnapshot, 0, len(entries))
+	for _, entry := range entries {
+		snapshot, _ := daemonapi.FromMountEntry(entry)
+		if passwordMode == entriesWithoutPasswords {
+			snapshot.Source.Password = ""
+		}
+		snapshots = append(snapshots, snapshot)
+	}
+	return snapshots
+}
+
+func printDaemonResults(entries []*config.MountEntry, results []daemonapi.OperationResult, successWord string) (success, fail int) {
+	byName := make(map[string]daemonapi.OperationResult, len(results))
+	for _, result := range results {
+		byName[result.Name] = result
+	}
+	for i, entry := range entries {
+		fmt.Printf("  [%d/%d] %s\n", i+1, len(entries), entry.Name)
+		if successWord == "mounted" {
+			fmt.Printf("    From: %s\n", entrySource(entry))
+			fmt.Printf("    To: %s\n", entry.MountDirPath)
+		} else {
+			fmt.Printf("    At: %s\n", entry.MountDirPath)
+		}
+		result, ok := byName[entry.Name]
+		if !ok {
+			fmt.Fprintln(os.Stderr, "    ERROR: daemon did not return a result")
+			fail++
+			continue
+		}
+		if !result.Success {
+			if result.Error != nil {
+				fmt.Fprintf(os.Stderr, "    ERROR: %s\n", result.Error.Message)
+				if result.Error.Detail != "" {
+					fmt.Fprintf(os.Stderr, "           %s\n", result.Error.Detail)
+				}
+			} else {
+				fmt.Fprintf(os.Stderr, "    ERROR: %s\n", result.Message)
+			}
+			fail++
+			continue
+		}
+		if result.Skipped {
+			fmt.Printf("    %s\n\n", result.Message)
+		} else {
+			fmt.Printf("    Successfully %s\n\n", successWord)
+		}
+		success++
+	}
+	return success, fail
+}
+
+func refreshAllStatus(ctx context.Context, mgr *drivers.Manager, cfg *config.Config) error {
+	var managed []*config.MountEntry
+	for i := range cfg.Mounts {
+		entry := &cfg.Mounts[i]
+		if isDaemonManagedEntry(entry) {
+			entry.IsMounted = false
+			managed = append(managed, entry)
+			continue
+		}
+		status, err := mgr.Status(ctx, entry.Name)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to get status for %s: %v\n", entry.Name, err)
+			entry.IsMounted = false
+			continue
+		}
+		entry.IsMounted = status.Mounted
+	}
+	if len(managed) == 0 {
+		return nil
+	}
+	client, err := newDaemonClient(cfg)
+	if err != nil {
+		return nil
+	}
+	resp, err := client.Status(ctx, snapshotsFromEntries(entriesWithoutPasswords, managed))
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil
+		}
+		fmt.Fprintf(os.Stderr, "Warning: failed to query daemon status: %v\n", err)
+		return nil
+	}
+	byName := make(map[string]daemonapi.OperationResult, len(resp.Statuses))
+	for _, status := range resp.Statuses {
+		byName[status.Name] = status
+	}
+	for _, entry := range managed {
+		if status, ok := byName[entry.Name]; ok && status.Managed {
+			entry.IsMounted = status.Mounted
+		}
+	}
+	return nil
 }
 
 func unmountEntries(ctx context.Context, mgr *drivers.Manager, entries []*config.MountEntry) (success, fail int) {
@@ -276,7 +803,7 @@ func runMount(cmd *cobra.Command, args []string) error {
 	mgr := createDriverManager(cfg)
 	ctx := context.Background()
 
-	if err := mgr.RefreshAllStatus(ctx); err != nil {
+	if err := refreshAllStatus(ctx, mgr, cfg); err != nil {
 		fmt.Fprintf(os.Stderr, "Warning: failed to refresh mount status: %v\n", err)
 	}
 
@@ -294,7 +821,11 @@ func runMount(cmd *cobra.Command, args []string) error {
 		entries = append(entries, entry)
 	}
 
-	success, fail := mountEntries(ctx, mgr, entries)
+	local, managed := splitDaemonManagedEntries(entries)
+	success, fail := mountEntries(ctx, mgr, local)
+	dSuccess, dFail := mountDaemonEntries(ctx, cfg, managed)
+	success += dSuccess
+	fail += dFail
 	if fail > 0 && success == 0 {
 		return fmt.Errorf("%d mount(s) failed", fail)
 	}
@@ -311,7 +842,7 @@ func runUmount(cmd *cobra.Command, args []string) error {
 	mgr := createDriverManager(cfg)
 	ctx := context.Background()
 
-	if err := mgr.RefreshAllStatus(ctx); err != nil {
+	if err := refreshAllStatus(ctx, mgr, cfg); err != nil {
 		fmt.Fprintf(os.Stderr, "Warning: failed to refresh mount status: %v\n", err)
 	}
 
@@ -329,7 +860,11 @@ func runUmount(cmd *cobra.Command, args []string) error {
 		entries = append(entries, entry)
 	}
 
-	success, fail := unmountEntries(ctx, mgr, entries)
+	local, managed := splitDaemonManagedEntries(entries)
+	success, fail := unmountEntries(ctx, mgr, local)
+	dSuccess, dFail := unmountDaemonEntries(ctx, cfg, managed)
+	success += dSuccess
+	fail += dFail
 	if fail > 0 && success == 0 {
 		return fmt.Errorf("%d unmount(s) failed", fail)
 	}
@@ -346,7 +881,7 @@ func runInteractive(cmd *cobra.Command, args []string) error {
 	mgr := createDriverManager(cfg)
 	ctx := context.Background()
 
-	if err := mgr.RefreshAllStatus(ctx); err != nil {
+	if err := refreshAllStatus(ctx, mgr, cfg); err != nil {
 		fmt.Fprintf(os.Stderr, "Warning: failed to refresh mount status: %v\n", err)
 	}
 
@@ -359,11 +894,15 @@ func runInteractive(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	uSuccess, uFail := unmountEntries(ctx, mgr, result.ToUnmount)
-	mSuccess, mFail := mountEntries(ctx, mgr, result.ToMount)
+	uLocal, uManaged := splitDaemonManagedEntries(result.ToUnmount)
+	mLocal, mManaged := splitDaemonManagedEntries(result.ToMount)
+	uSuccess, uFail := unmountEntries(ctx, mgr, uLocal)
+	duSuccess, duFail := unmountDaemonEntries(ctx, cfg, uManaged)
+	mSuccess, mFail := mountEntries(ctx, mgr, mLocal)
+	dmSuccess, dmFail := mountDaemonEntries(ctx, cfg, mManaged)
 
-	totalSuccess := uSuccess + mSuccess
-	totalFail := uFail + mFail
+	totalSuccess := uSuccess + duSuccess + mSuccess + dmSuccess
+	totalFail := uFail + duFail + mFail + dmFail
 	if totalFail > 0 && totalSuccess == 0 {
 		return fmt.Errorf("all operations failed")
 	}

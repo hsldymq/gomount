@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"net/url"
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/lipgloss/table"
@@ -14,8 +15,27 @@ func entryAddr(entry config.MountEntry) string {
 		return fmt.Sprintf("//%s:%d/%s", entry.SMB.Addr, entry.SMB.GetPort(), entry.SMB.ShareName)
 	case entry.SSHFS != nil:
 		return fmt.Sprintf("%s:%s", entry.SSHFS.Host, entry.SSHFS.RemotePath)
+	case entry.WebDAV != nil:
+		return webdavAddr(entry.WebDAV.URL, entry.WebDAV.Path)
 	}
 	return ""
+}
+
+func webdavAddr(rawURL, path string) string {
+	rawURL = redactURLUserinfo(rawURL)
+	if path == "" {
+		return rawURL
+	}
+	return fmt.Sprintf("%s:%s", rawURL, path)
+}
+
+func redactURLUserinfo(rawURL string) string {
+	parsed, err := url.Parse(rawURL)
+	if err != nil || parsed.User == nil {
+		return rawURL
+	}
+	parsed.User = url.User("xxxxx")
+	return parsed.String()
 }
 
 func DisplayList(mounts []config.MountEntry) error {
