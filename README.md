@@ -1,11 +1,11 @@
 # gomount
 
-A convenient CLI tool for managing SMB/CIFS and SSHFS mounts on Linux and macOS systems with an interactive TUI.
+A convenient CLI tool for managing SMB/CIFS, SSHFS, and a Linux-only WebDAV daemon proof with an interactive TUI.
 
 ## Features
 
 - **Simple Configuration**: Define all your mounts in a single YAML file
-- **Multiple Protocols**: Supports SMB/CIFS and SSHFS
+- **Multiple Protocols**: Supports SMB/CIFS, SSHFS, and Linux-only WebDAV daemon proof
 - **Interactive TUI**: Beautiful terminal UI for browsing and selecting shares
 - **Mount Status Tracking**: Check which shares are currently mounted
 - **Interactive Selection**: Easy selection for mount/unmount operations
@@ -44,6 +44,7 @@ sudo cp bin/gomount /usr/local/bin/
 - Linux: `mount.cifs` command (install `cifs-utils` package) — for SMB mounts
 - macOS: `mount_smbfs` command — for SMB mounts
 - `sshfs` command — for SSHFS mounts
+- Linux WebDAV proof requires FUSE support
 - Linux SMB mounts require `sudo` access
 - Go 1.25+ (for building from source)
 
@@ -66,9 +67,14 @@ sudo pacman -S cifs-utils sshfs
 
 ## Configuration
 
-Create a configuration file at `~/.config/gomount_config.yaml`:
+Create a configuration file at `~/.config/gomount.yaml`:
 
 ```yaml
+daemon:
+  log_target: syslog                 # syslog, file, or stderr; default syslog
+  # log_file: ~/.local/share/gomount/gomount-daemon.log
+  # socket_path: ~/.local/share/gomount/gomount.sock
+
 mounts:
   # SMB/CIFS mount
   - name: nas
@@ -90,12 +96,22 @@ mounts:
       remote_path: /home/user/projects
     mount_dir_path: /mnt/dev
 
+  # WebDAV mount (Linux-only proof, managed by gomount daemon)
+  - name: docs
+    type: webdav
+    webdav:
+      url: https://cloud.example.com/remote.php/dav/files/user/
+      username: user                # optional
+      password: pass                # optional
+      path: /team/docs              # optional path under the WebDAV endpoint
+    mount_dir_path: ~/Mounts/docs
+
 ```
 
 You can generate a full example config with:
 
 ```bash
-gomount config-example > ~/.config/gomount_config.yaml
+gomount config-example > ~/.config/gomount.yaml
 ```
 
 ### Configuration Options
@@ -105,8 +121,18 @@ gomount config-example > ~/.config/gomount_config.yaml
 | Field | Required | Default | Description |
 |-------|----------|---------|-------------|
 | `name` | Yes | - | Unique identifier for this mount |
-| `type` | Yes | - | Mount type (`smb`, `sshfs`). |
+| `type` | Yes | - | Mount type (`smb`, `sshfs`, `webdav`). |
 | `mount_dir_path` | Yes | - | Full local path for the mount point. Supports `~` expansion. |
+
+#### Daemon (`daemon:` block)
+
+| Field | Required | Default | Description |
+|-------|----------|---------|-------------|
+| `daemon.log_target` | No | `syslog` | Daemon output target. `syslog` falls back to `stderr` if unavailable. Use `file` for a fixed log file or `stderr` for debugging. |
+| `daemon.log_file` | No | `~/.local/share/gomount/gomount-daemon.log` | Log file used when `log_target` is `file`. |
+| `daemon.socket_path` | No | `~/.local/share/gomount/gomount.sock` | Unix socket path used by CLI and daemon. Use the same config file for mount/status/down when customized. |
+
+On Linux, syslog messages are usually visible with `journalctl -t gomount-daemon -f` when journald collects syslog. On macOS, gomount uses the system syslog compatibility path and does not require Unified Logging integration.
 
 #### SMB (`smb:` block)
 
@@ -124,6 +150,15 @@ gomount config-example > ~/.config/gomount_config.yaml
 |-------|----------|---------|-------------|
 | `sshfs.host` | Yes | - | SSH hostname or `~/.ssh/config` alias |
 | `sshfs.remote_path` | Yes | - | Remote directory path to mount |
+
+#### WebDAV (`webdav:` block, Linux-only proof)
+
+| Field | Required | Default | Description |
+|-------|----------|---------|-------------|
+| `webdav.url` | Yes | - | WebDAV endpoint URL |
+| `webdav.username` | No | - | Login username |
+| `webdav.password` | No | - | Login password |
+| `webdav.path` | No | - | Path under the WebDAV endpoint |
 
 ## Usage
 
@@ -187,6 +222,20 @@ Use a configuration file from a custom location:
 gomount -c /path/to/config.yaml list
 ```
 
+### Daemon Management
+
+WebDAV mounts are managed by the gomount daemon. Check whether it is running:
+
+```bash
+gomount daemon status
+```
+
+Stop the daemon gracefully. Active WebDAV sessions are unmounted first; if any unmount fails, the daemon keeps running and reports the failed session.
+
+```bash
+gomount daemon down
+```
+
 ### Help
 
 ```bash
@@ -194,6 +243,7 @@ gomount --help
 gomount list --help
 gomount mount --help
 gomount umount --help
+gomount daemon --help
 ```
 
 ## CLI Reference
@@ -203,6 +253,8 @@ gomount                          Show help (default)
 gomount list                     List all configured mount points
 gomount mount [name]             Mount shares (interactive without name)
 gomount umount [name]            Unmount shares (interactive without name)
+gomount daemon status            Show daemon status and PID
+gomount daemon down              Gracefully stop the daemon
 gomount config-example           Print example config file
 
 Global Options:

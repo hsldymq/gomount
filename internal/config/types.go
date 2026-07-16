@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"net/url"
 
 	"go.yaml.in/yaml/v3"
 )
@@ -28,6 +29,7 @@ type Config struct {
 	Mounts  []MountEntry   `yaml:"mounts" mapstructure:"mounts"`
 	Include []string       `yaml:"include,omitempty" mapstructure:"include"`
 	Sorting *SortingConfig `yaml:"sorting,omitempty" mapstructure:"sorting"`
+	Daemon  *DaemonConfig  `yaml:"daemon,omitempty" mapstructure:"daemon"`
 }
 
 // MountEntry 单个挂载配置（支持多种协议）
@@ -36,8 +38,9 @@ type MountEntry struct {
 	Type         string `yaml:"type" mapstructure:"type" validate:"required"`
 	MountDirPath string `yaml:"mount_dir_path" mapstructure:"mount_dir_path" validate:"required"`
 
-	SMB   *SMBConfig   `yaml:"smb,omitempty" mapstructure:"smb"`
-	SSHFS *SSHFSConfig `yaml:"sshfs,omitempty" mapstructure:"sshfs"`
+	SMB    *SMBConfig    `yaml:"smb,omitempty" mapstructure:"smb"`
+	SSHFS  *SSHFSConfig  `yaml:"sshfs,omitempty" mapstructure:"sshfs"`
+	WebDAV *WebDAVConfig `yaml:"webdav,omitempty" mapstructure:"webdav"`
 
 	SSHTunnel *SSHTunnelConfig `yaml:"ssh_tunnel,omitempty" mapstructure:"ssh_tunnel"`
 
@@ -60,12 +63,32 @@ type SSHFSConfig struct {
 	RemotePath string `yaml:"remote_path" mapstructure:"remote_path" validate:"required"`
 }
 
+type WebDAVConfig struct {
+	URL      string `yaml:"url" mapstructure:"url" validate:"required,url"`
+	Username string `yaml:"username,omitempty" mapstructure:"username"`
+	Password string `yaml:"password,omitempty" mapstructure:"password"`
+	Path     string `yaml:"path,omitempty" mapstructure:"path"`
+}
+
 type SSHTunnelConfig struct {
 	Host string `yaml:"host" mapstructure:"host" validate:"required"`
 }
 
 type SortingConfig struct {
 	By StringOrSlice `yaml:"by" mapstructure:"by"`
+}
+
+type DaemonConfig struct {
+	LogTarget  string `yaml:"log_target,omitempty" mapstructure:"log_target"`
+	LogFile    string `yaml:"log_file,omitempty" mapstructure:"log_file"`
+	SocketPath string `yaml:"socket_path,omitempty" mapstructure:"socket_path"`
+}
+
+func (d *DaemonConfig) GetLogTarget() string {
+	if d == nil || d.LogTarget == "" {
+		return "syslog"
+	}
+	return d.LogTarget
 }
 
 func (m *MountEntry) GetMountPath() string {
@@ -96,6 +119,20 @@ func (m *MountEntry) ValidateDriverConfig() error {
 	case "sshfs":
 		if m.SSHFS == nil {
 			return fmt.Errorf("mount entry '%s': type is 'sshfs' but 'sshfs' config is missing", m.Name)
+		}
+	case "webdav":
+		if m.WebDAV == nil {
+			return fmt.Errorf("mount entry '%s': type is 'webdav' but 'webdav' config is missing", m.Name)
+		}
+		if m.WebDAV.URL == "" {
+			return fmt.Errorf("mount entry '%s': webdav.url is required", m.Name)
+		}
+		parsedURL, err := url.Parse(m.WebDAV.URL)
+		if err != nil {
+			return fmt.Errorf("mount entry '%s': invalid webdav.url: %w", m.Name, err)
+		}
+		if parsedURL.User != nil {
+			return fmt.Errorf("mount entry '%s': webdav.url must not include credentials; use webdav.username and webdav.password", m.Name)
 		}
 	default:
 		return fmt.Errorf("mount entry '%s': unknown type '%s'", m.Name, m.Type)

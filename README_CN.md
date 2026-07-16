@@ -1,11 +1,11 @@
 # gomount
 
-一个方便的 Linux 和 macOS 系统上管理 SMB/CIFS、SSHFS 挂载的命令行工具，提供交互式 TUI 界面。
+一个方便的 Linux 和 macOS 系统上管理 SMB/CIFS、SSHFS，以及 Linux-only WebDAV daemon proof 的命令行工具，提供交互式 TUI 界面。
 
 ## 特性
 
 - **简单配置**：在单个 YAML 文件中定义所有挂载
-- **多协议支持**：支持 SMB/CIFS 和 SSHFS
+- **多协议支持**：支持 SMB/CIFS、SSHFS 和 Linux-only WebDAV daemon proof
 - **交互式 TUI**：美观的终端界面用于浏览和选择共享
 - **挂载状态跟踪**：查看当前已挂载的共享
 - **交互式选择**：轻松选择挂载/卸载操作
@@ -44,6 +44,7 @@ sudo cp bin/gomount /usr/local/bin/
 - Linux：`mount.cifs` 命令（需安装 `cifs-utils` 软件包）— 用于 SMB 挂载
 - macOS：`mount_smbfs` 命令 — 用于 SMB 挂载
 - `sshfs` 命令 — 用于 SSHFS 挂载
+- Linux WebDAV proof 需要 FUSE 支持
 - Linux SMB 挂载需要 `sudo` 权限
 - Go 1.25+ （从源码构建时需要）
 
@@ -66,9 +67,14 @@ sudo pacman -S cifs-utils sshfs
 
 ## 配置
 
-在 `~/.config/gomount_config.yaml` 创建配置文件：
+在 `~/.config/gomount.yaml` 创建配置文件：
 
 ```yaml
+daemon:
+  log_target: syslog                 # syslog、file 或 stderr，默认 syslog
+  # log_file: ~/.local/share/gomount/gomount-daemon.log
+  # socket_path: ~/.local/share/gomount/gomount.sock
+
 mounts:
   # SMB/CIFS 挂载
   - name: nas
@@ -90,12 +96,22 @@ mounts:
       remote_path: /home/user/projects
     mount_dir_path: /mnt/dev
 
+  # WebDAV 挂载（Linux-only proof，由 gomount daemon 管理）
+  - name: docs
+    type: webdav
+    webdav:
+      url: https://cloud.example.com/remote.php/dav/files/user/
+      username: user                # 可选
+      password: pass                # 可选
+      path: /team/docs              # WebDAV endpoint 下的可选路径
+    mount_dir_path: ~/Mounts/docs
+
 ```
 
 可以使用以下命令生成完整的配置文件示例：
 
 ```bash
-gomount config-example > ~/.config/gomount_config.yaml
+gomount config-example > ~/.config/gomount.yaml
 ```
 
 ### 配置选项
@@ -105,8 +121,18 @@ gomount config-example > ~/.config/gomount_config.yaml
 | 字段 | 必需 | 默认值 | 描述 |
 |-----|------|--------|------|
 | `name` | 是 | - | 此挂载的唯一标识符 |
-| `type` | 是 | - | 挂载类型（`smb`、`sshfs`）。 |
+| `type` | 是 | - | 挂载类型（`smb`、`sshfs`、`webdav`）。 |
 | `mount_dir_path` | 是 | - | 挂载点的完整本地路径。支持 `~` 展开。 |
+
+#### Daemon（`daemon:` 块）
+
+| 字段 | 必需 | 默认值 | 描述 |
+|-----|------|--------|------|
+| `daemon.log_target` | 否 | `syslog` | daemon 输出目标。`syslog` 不可用时回退 `stderr`；需要固定日志文件时用 `file`，调试时可用 `stderr`。 |
+| `daemon.log_file` | 否 | `~/.local/share/gomount/gomount-daemon.log` | `log_target` 为 `file` 时使用的日志文件。 |
+| `daemon.socket_path` | 否 | `~/.local/share/gomount/gomount.sock` | CLI 和 daemon 使用的 Unix socket 路径。自定义后 mount/status/down 需要使用同一个配置文件。 |
+
+Linux 上如果 journald 收集 syslog，通常可用 `journalctl -t gomount-daemon -f` 查看。macOS 使用系统 syslog 兼容路径，不依赖 Unified Logging 集成。
 
 #### SMB（`smb:` 块）
 
@@ -124,6 +150,15 @@ gomount config-example > ~/.config/gomount_config.yaml
 |-----|------|--------|------|
 | `sshfs.host` | 是 | - | SSH 主机名或 `~/.ssh/config` 别名 |
 | `sshfs.remote_path` | 是 | - | 要挂载的远程目录路径 |
+
+#### WebDAV（`webdav:` 块，Linux-only proof）
+
+| 字段 | 必需 | 默认值 | 描述 |
+|-----|------|--------|------|
+| `webdav.url` | 是 | - | WebDAV endpoint URL |
+| `webdav.username` | 否 | - | 登录用户名 |
+| `webdav.password` | 否 | - | 登录密码 |
+| `webdav.path` | 否 | - | WebDAV endpoint 下的路径 |
 
 ## 使用方法
 
@@ -187,6 +222,20 @@ gomount -u
 gomount -c /path/to/config.yaml list
 ```
 
+### Daemon 管理
+
+WebDAV 挂载由 gomount daemon 管理。查看 daemon 是否运行：
+
+```bash
+gomount daemon status
+```
+
+优雅停止 daemon。停止前会先卸载所有 WebDAV session；如果任一卸载失败，daemon 会保持运行并报告失败条目。
+
+```bash
+gomount daemon down
+```
+
 ### 帮助
 
 ```bash
@@ -194,6 +243,7 @@ gomount --help
 gomount list --help
 gomount mount --help
 gomount umount --help
+gomount daemon --help
 ```
 
 ## CLI 参考
@@ -203,6 +253,8 @@ gomount                          显示帮助（默认）
 gomount list                     列出所有配置的挂载点
 gomount mount [name]             挂载共享（不带名称时为交互式）
 gomount umount [name]            卸载共享（不带名称时为交互式）
+gomount daemon status            显示 daemon 状态和 PID
+gomount daemon down              优雅停止 daemon
 gomount config-example           输出配置文件示例
 
 全局选项：

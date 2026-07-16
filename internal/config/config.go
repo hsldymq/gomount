@@ -48,6 +48,13 @@ func doLoad(path string) (*Config, error) {
 		cfg.applySorting(cfg.Sorting)
 	}
 
+	if cfg.Daemon == nil {
+		cfg.Daemon = &DaemonConfig{}
+	}
+	if err := cfg.Daemon.Validate(); err != nil {
+		return nil, &ConfigError{Path: absPath, Err: err}
+	}
+
 	for i := range cfg.Mounts {
 		if err := cfg.Mounts[i].ValidateDriverConfig(); err != nil {
 			return nil, &ConfigError{Path: absPath, Err: err}
@@ -59,6 +66,15 @@ func doLoad(path string) (*Config, error) {
 	}
 
 	return cfg, nil
+}
+
+func (d *DaemonConfig) Validate() error {
+	switch d.GetLogTarget() {
+	case "file", "stderr", "syslog":
+		return nil
+	default:
+		return fmt.Errorf("daemon.log_target must be 'syslog', 'file', or 'stderr'")
+	}
 }
 
 func loadRecursive(path string, visited map[string]bool) (*Config, error) {
@@ -209,12 +225,50 @@ func compareField(a, b MountEntry, field string) int {
 
 // Normalize 应用默认值并解析路径
 func (c *Config) Normalize() error {
+	if c.Daemon != nil {
+		if err := c.Daemon.Normalize(); err != nil {
+			return err
+		}
+	}
 	for i := range c.Mounts {
 		if err := c.Mounts[i].Normalize(); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+func (d *DaemonConfig) Normalize() error {
+	if d.LogFile != "" {
+		logFile, err := normalizeUserPath(d.LogFile)
+		if err != nil {
+			return fmt.Errorf("failed to normalize daemon.log_file: %w", err)
+		}
+		d.LogFile = logFile
+	}
+	if d.SocketPath != "" {
+		socketPath, err := normalizeUserPath(d.SocketPath)
+		if err != nil {
+			return fmt.Errorf("failed to normalize daemon.socket_path: %w", err)
+		}
+		d.SocketPath = socketPath
+	}
+	return nil
+}
+
+func normalizeUserPath(path string) (string, error) {
+	if len(path) > 0 && path[0] == '~' {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return "", fmt.Errorf("failed to expand ~: %w", err)
+		}
+		path = home + path[1:]
+	}
+	absPath, err := filepath.Abs(path)
+	if err != nil {
+		return "", fmt.Errorf("failed to resolve absolute path: %w", err)
+	}
+	return absPath, nil
 }
 
 // Normalize 解析单个条目的挂载路径

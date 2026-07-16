@@ -2,6 +2,15 @@
 # 复制到 ~/.config/gomount.yaml 并根据需要修改
 # 使用: gomount config-example > ~/.config/gomount.yaml
 
+# daemon 配置 (可选)
+# daemon:
+#   # log_target 可选, 默认 syslog; syslog 不可用时回退 stderr
+#   log_target: syslog
+#   # log_file 可选, 默认 ~/.local/share/gomount/gomount-daemon.log
+#   log_file: ~/.local/share/gomount/gomount-daemon.log
+#   # socket_path 可选, 默认 ~/.local/share/gomount/gomount.sock
+#   socket_path: ~/.local/share/gomount/gomount.sock
+
 mounts:
   # SSHFS 挂载
   # 连接细节（用户名、端口、密钥等）由 ~/.ssh/config 管理, 支持 ProxyJump
@@ -34,6 +43,16 @@ mounts:
   #   ssh_tunnel:
   #     host: bastion.example.com  # 跳板机（走 ~/.ssh/config）
   #   mount_dir_path: /mnt/remote-nas
+
+  # WebDAV 挂载（Linux-only proof：由 gomount daemon 内嵌 rclone 库管理）
+  # - name: docs
+  #   type: webdav
+  #   webdav:
+  #     url: https://cloud.example.com/remote.php/dav/files/user/
+  #     username: user               # 可选
+  #     password: pass               # 可选
+  #     path: /team/docs             # WebDAV endpoint 下的路径，可省略
+  #   mount_dir_path: ~/Mounts/docs
 
   # 引用其他配置文件 (支持 ~, 相对路径, glob)
   # include:
