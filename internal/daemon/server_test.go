@@ -25,7 +25,7 @@ func TestServerHealth(t *testing.T) {
 	if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
 		t.Fatalf("decode health: %v", err)
 	}
-	if !got.OK || got.PID != os.Getpid() || got.MountedSessions != 0 || len(got.ManagedTypes) != 2 || got.ManagedTypes[0] != "oss" || got.ManagedTypes[1] != "webdav" {
+	if !got.OK || got.PID != os.Getpid() || got.MountedSessions != 0 || len(got.ManagedTypes) != 2 || got.ManagedTypes[0] != "aliyun_oss" || got.ManagedTypes[1] != "webdav" {
 		t.Fatalf("unexpected health: %+v", got)
 	}
 }

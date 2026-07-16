@@ -40,7 +40,7 @@ func TestFromMountEntryReturnsUnmanagedSnapshotForSMB(t *testing.T) {
 }
 
 func TestFromMountEntryConvertsOSS(t *testing.T) {
-	entry := config.MountEntry{Name: "archive", Type: "oss", MountDirPath: "/mnt/oss", OSS: &config.OSSConfig{
+	entry := config.MountEntry{Name: "archive", Type: "aliyun_oss", MountDirPath: "/mnt/oss", AliyunOSS: &config.AliyunOSSConfig{
 		Bucket: "my-bucket", Path: "backups", Endpoint: "oss-cn-hangzhou.aliyuncs.com",
 		AccessKeyID: "id", AccessKeySecret: "secret", SecurityToken: "token",
 	}}

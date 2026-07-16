@@ -1,4 +1,4 @@
-//go:build !linux
+//go:build !linux && !darwin
 
 package daemon
 
@@ -19,5 +19,5 @@ func SupportedManagedTypes() []string {
 }
 
 func (m *RcloneMounter) Mount(entry daemonapi.EntrySnapshot) (MountSession, error) {
-	return nil, fmt.Errorf("embedded rclone managed mounts are only supported on Linux")
+	return nil, fmt.Errorf("embedded rclone managed mounts are not supported on this platform")
 }

@@ -44,7 +44,7 @@ mounts:
   #     host: bastion.example.com  # 跳板机（走 ~/.ssh/config）
   #   mount_dir_path: /mnt/remote-nas
 
-  # WebDAV 挂载（Linux-only proof：由 gomount daemon 内嵌 rclone 库管理）
+  # WebDAV 挂载（由 gomount daemon 内嵌 rclone 库管理；macOS 构建需 -tags cmount）
   # - name: docs
   #   type: webdav
   #   webdav:
@@ -54,10 +54,10 @@ mounts:
   #     path: /team/docs             # WebDAV endpoint 下的路径，可省略
   #   mount_dir_path: ~/Mounts/docs
 
-  # 阿里云 OSS 挂载（Linux-only，由 gomount daemon 内嵌 rclone 库管理）
+  # 阿里云 OSS 挂载（由 gomount daemon 内嵌 rclone 库管理；macOS 构建需 -tags cmount）
   # - name: aliyun-archive
-  #   type: oss
-  #   oss:
+  #   type: aliyun_oss
+  #   aliyun_oss:
   #     bucket: my-bucket
   #     path: backups                  # bucket 下的可选前缀
   #     endpoint: oss-cn-hangzhou.aliyuncs.com

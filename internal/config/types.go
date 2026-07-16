@@ -38,10 +38,10 @@ type MountEntry struct {
 	Type         string `yaml:"type" mapstructure:"type" validate:"required"`
 	MountDirPath string `yaml:"mount_dir_path" mapstructure:"mount_dir_path" validate:"required"`
 
-	SMB    *SMBConfig    `yaml:"smb,omitempty" mapstructure:"smb"`
-	SSHFS  *SSHFSConfig  `yaml:"sshfs,omitempty" mapstructure:"sshfs"`
-	WebDAV *WebDAVConfig `yaml:"webdav,omitempty" mapstructure:"webdav"`
-	OSS    *OSSConfig    `yaml:"oss,omitempty" mapstructure:"oss"`
+	SMB       *SMBConfig       `yaml:"smb,omitempty" mapstructure:"smb"`
+	SSHFS     *SSHFSConfig     `yaml:"sshfs,omitempty" mapstructure:"sshfs"`
+	WebDAV    *WebDAVConfig    `yaml:"webdav,omitempty" mapstructure:"webdav"`
+	AliyunOSS *AliyunOSSConfig `yaml:"aliyun_oss,omitempty" mapstructure:"aliyun_oss"`
 
 	SSHTunnel *SSHTunnelConfig `yaml:"ssh_tunnel,omitempty" mapstructure:"ssh_tunnel"`
 
@@ -71,8 +71,8 @@ type WebDAVConfig struct {
 	Path     string `yaml:"path,omitempty" mapstructure:"path"`
 }
 
-// OSSConfig configures an Alibaba Cloud OSS bucket through rclone's S3 backend.
-type OSSConfig struct {
+// AliyunOSSConfig configures an Alibaba Cloud OSS bucket through rclone's S3 backend.
+type AliyunOSSConfig struct {
 	Bucket          string `yaml:"bucket" mapstructure:"bucket" validate:"required"`
 	Path            string `yaml:"path,omitempty" mapstructure:"path"`
 	Endpoint        string `yaml:"endpoint" mapstructure:"endpoint" validate:"required"`
@@ -145,21 +145,21 @@ func (m *MountEntry) ValidateDriverConfig() error {
 		if parsedURL.User != nil {
 			return fmt.Errorf("mount entry '%s': webdav.url must not include credentials; use webdav.username and webdav.password", m.Name)
 		}
-	case "oss":
-		if m.OSS == nil {
-			return fmt.Errorf("mount entry '%s': type is 'oss' but 'oss' config is missing", m.Name)
+	case "aliyun_oss":
+		if m.AliyunOSS == nil {
+			return fmt.Errorf("mount entry '%s': type is 'aliyun_oss' but 'aliyun_oss' config is missing", m.Name)
 		}
-		if m.OSS.Bucket == "" {
-			return fmt.Errorf("mount entry '%s': oss.bucket is required", m.Name)
+		if m.AliyunOSS.Bucket == "" {
+			return fmt.Errorf("mount entry '%s': aliyun_oss.bucket is required", m.Name)
 		}
-		if m.OSS.Endpoint == "" {
-			return fmt.Errorf("mount entry '%s': oss.endpoint is required", m.Name)
+		if m.AliyunOSS.Endpoint == "" {
+			return fmt.Errorf("mount entry '%s': aliyun_oss.endpoint is required", m.Name)
 		}
-		if m.OSS.AccessKeyID == "" {
-			return fmt.Errorf("mount entry '%s': oss.access_key_id is required", m.Name)
+		if m.AliyunOSS.AccessKeyID == "" {
+			return fmt.Errorf("mount entry '%s': aliyun_oss.access_key_id is required", m.Name)
 		}
-		if m.OSS.AccessKeySecret == "" {
-			return fmt.Errorf("mount entry '%s': oss.access_key_secret is required", m.Name)
+		if m.AliyunOSS.AccessKeySecret == "" {
+			return fmt.Errorf("mount entry '%s': aliyun_oss.access_key_secret is required", m.Name)
 		}
 	default:
 		return fmt.Errorf("mount entry '%s': unknown type '%s'", m.Name, m.Type)

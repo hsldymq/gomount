@@ -24,7 +24,7 @@ func TestUnixClientHealth(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Health returned error: %v", err)
 	}
-	if !health.OK || len(health.ManagedTypes) != 2 || health.ManagedTypes[0] != "oss" || health.ManagedTypes[1] != "webdav" {
+	if !health.OK || len(health.ManagedTypes) != 2 || health.ManagedTypes[0] != "aliyun_oss" || health.ManagedTypes[1] != "webdav" {
 		t.Fatalf("unexpected health: %+v", health)
 	}
 }

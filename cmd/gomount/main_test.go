@@ -314,7 +314,7 @@ func TestSnapshotsFromEntriesCanIncludeWebDAVPassword(t *testing.T) {
 }
 
 func TestOSSEntrySourceAndSnapshotCredentialRedaction(t *testing.T) {
-	entry := &config.MountEntry{Name: "archive", Type: "oss", MountDirPath: "/mnt/oss", OSS: &config.OSSConfig{
+	entry := &config.MountEntry{Name: "archive", Type: "aliyun_oss", MountDirPath: "/mnt/oss", AliyunOSS: &config.AliyunOSSConfig{
 		Bucket: "my-bucket", Path: "/team/backups/", Endpoint: "oss-cn-hangzhou.aliyuncs.com",
 		AccessKeyID: "id", AccessKeySecret: "secret", SecurityToken: "token",
 	}}

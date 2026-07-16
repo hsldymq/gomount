@@ -123,7 +123,7 @@ func TestMountEntry_ValidateDriverConfigRejectsWebDAVURLUserinfo(t *testing.T) {
 }
 
 func TestMountEntryValidateDriverConfigAcceptsOSS(t *testing.T) {
-	entry := MountEntry{Name: "archive", Type: "oss", OSS: &OSSConfig{
+	entry := MountEntry{Name: "archive", Type: "aliyun_oss", AliyunOSS: &AliyunOSSConfig{
 		Bucket: "my-bucket", Endpoint: "oss-cn-hangzhou.aliyuncs.com", AccessKeyID: "id", AccessKeySecret: "secret",
 	}}
 	if err := entry.ValidateDriverConfig(); err != nil {
@@ -132,9 +132,17 @@ func TestMountEntryValidateDriverConfigAcceptsOSS(t *testing.T) {
 }
 
 func TestMountEntryValidateDriverConfigRejectsIncompleteOSS(t *testing.T) {
-	entry := MountEntry{Name: "archive", Type: "oss", OSS: &OSSConfig{Bucket: "my-bucket"}}
+	entry := MountEntry{Name: "archive", Type: "aliyun_oss", AliyunOSS: &AliyunOSSConfig{Bucket: "my-bucket"}}
 	err := entry.ValidateDriverConfig()
-	if err == nil || !strings.Contains(err.Error(), "oss.endpoint is required") {
+	if err == nil || !strings.Contains(err.Error(), "aliyun_oss.endpoint is required") {
 		t.Fatalf("expected missing endpoint error, got %v", err)
+	}
+}
+
+func TestMountEntryValidateDriverConfigRejectsLegacyOSSName(t *testing.T) {
+	entry := MountEntry{Name: "archive", Type: "oss"}
+	err := entry.ValidateDriverConfig()
+	if err == nil || !strings.Contains(err.Error(), "unknown type 'oss'") {
+		t.Fatalf("expected legacy oss type to be rejected, got %v", err)
 	}
 }

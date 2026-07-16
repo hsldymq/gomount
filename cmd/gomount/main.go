@@ -421,17 +421,17 @@ func entrySource(entry *config.MountEntry) string {
 			return ""
 		}
 		return webdavSource(entry.WebDAV.URL, entry.WebDAV.Path)
-	case "oss":
-		if entry.OSS == nil {
+	case "aliyun_oss":
+		if entry.AliyunOSS == nil {
 			return ""
 		}
-		return ossSource(entry.OSS)
+		return aliyunOSSSource(entry.AliyunOSS)
 	default:
 		return ""
 	}
 }
 
-func ossSource(cfg *config.OSSConfig) string {
+func aliyunOSSSource(cfg *config.AliyunOSSConfig) string {
 	root := cfg.Bucket
 	if cfg.Path != "" {
 		root += "/" + strings.Trim(cfg.Path, "/")

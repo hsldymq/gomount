@@ -92,7 +92,7 @@ func TestSessionManagerRejectsInvalidWebDAVSnapshot(t *testing.T) {
 func TestSessionManagerMountsOSSWithFakeMounter(t *testing.T) {
 	fake := &fakeMounter{}
 	mgr := NewSessionManager(fake)
-	entry := daemonapi.EntrySnapshot{Name: "archive", Type: "oss", MountDirPath: "/mnt/oss", Source: daemonapi.Source{
+	entry := daemonapi.EntrySnapshot{Name: "archive", Type: "aliyun_oss", MountDirPath: "/mnt/oss", Source: daemonapi.Source{
 		Bucket: "my-bucket", Endpoint: "oss-cn-hangzhou.aliyuncs.com", AccessKeyID: "id", AccessKeySecret: "secret",
 	}}
 	result := mgr.Mount(entry)

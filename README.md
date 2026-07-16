@@ -1,11 +1,11 @@
 # gomount
 
-A convenient CLI tool for managing SMB/CIFS, SSHFS, and Linux-only WebDAV and Alibaba Cloud OSS mounts with an interactive TUI.
+A convenient CLI tool for managing SMB/CIFS, SSHFS, WebDAV, and Alibaba Cloud OSS mounts with an interactive TUI.
 
 ## Features
 
 - **Simple Configuration**: Define all your mounts in a single YAML file
-- **Multiple Protocols**: Supports SMB/CIFS, SSHFS, and Linux-only WebDAV and Alibaba Cloud OSS
+- **Multiple Protocols**: Supports SMB/CIFS, SSHFS, WebDAV, and Alibaba Cloud OSS
 - **Interactive TUI**: Beautiful terminal UI for browsing and selecting shares
 - **Mount Status Tracking**: Check which shares are currently mounted
 - **Interactive Selection**: Easy selection for mount/unmount operations
@@ -44,9 +44,19 @@ sudo cp bin/gomount /usr/local/bin/
 - Linux: `mount.cifs` command (install `cifs-utils` package) — for SMB mounts
 - macOS: `mount_smbfs` command — for SMB mounts
 - `sshfs` command — for SSHFS mounts
-- Linux WebDAV proof requires FUSE support
+- Linux cloud mounts require FUSE support
+- macOS cloud mounts require macFUSE, CGO, and a binary built with `-tags cmount`
 - Linux SMB mounts require `sudo` access
 - Go 1.25+ (for building from source)
+
+For WebDAV and OSS mounts on macOS, install macFUSE and build the macOS-enabled binary:
+
+```bash
+brew install --cask macfuse
+CGO_ENABLED=1 go build -tags cmount -o bin/gomount ./cmd/gomount
+```
+
+During development use `CGO_ENABLED=1 go run -tags cmount ./cmd/gomount i`. A regular macOS build still supports SMB and SSHFS, but cloud mounts return an actionable build error.
 
 ### Install Dependencies
 
@@ -96,7 +106,7 @@ mounts:
       remote_path: /home/user/projects
     mount_dir_path: /mnt/dev
 
-  # WebDAV mount (Linux-only proof, managed by gomount daemon)
+  # WebDAV mount (managed by gomount daemon)
   - name: docs
     type: webdav
     webdav:
@@ -106,10 +116,10 @@ mounts:
       path: /team/docs              # optional path under the WebDAV endpoint
     mount_dir_path: ~/Mounts/docs
 
-  # Alibaba Cloud OSS mount (Linux-only, managed by gomount daemon)
+  # Alibaba Cloud OSS mount (managed by gomount daemon)
   - name: aliyun-archive
-    type: oss
-    oss:
+    type: aliyun_oss
+    aliyun_oss:
       bucket: my-bucket
       path: backups
       endpoint: oss-cn-hangzhou.aliyuncs.com
@@ -133,7 +143,7 @@ gomount config-example > ~/.config/gomount.yaml
 | Field | Required | Default | Description |
 |-------|----------|---------|-------------|
 | `name` | Yes | - | Unique identifier for this mount |
-| `type` | Yes | - | Mount type (`smb`, `sshfs`, `webdav`, `oss`). |
+| `type` | Yes | - | Mount type (`smb`, `sshfs`, `webdav`, `aliyun_oss`). |
 | `mount_dir_path` | Yes | - | Full local path for the mount point. Supports `~` expansion. |
 
 #### Daemon (`daemon:` block)
@@ -163,7 +173,7 @@ On Linux, syslog messages are usually visible with `journalctl -t gomount-daemon
 | `sshfs.host` | Yes | - | SSH hostname or `~/.ssh/config` alias |
 | `sshfs.remote_path` | Yes | - | Remote directory path to mount |
 
-#### WebDAV (`webdav:` block, Linux-only proof)
+#### WebDAV (`webdav:` block)
 
 | Field | Required | Default | Description |
 |-------|----------|---------|-------------|
@@ -172,16 +182,16 @@ On Linux, syslog messages are usually visible with `journalctl -t gomount-daemon
 | `webdav.password` | No | - | Login password |
 | `webdav.path` | No | - | Path under the WebDAV endpoint |
 
-#### Alibaba Cloud OSS (`oss:` block, Linux-only)
+#### Alibaba Cloud OSS (`aliyun_oss:` block)
 
 | Field | Required | Default | Description |
 |-------|----------|---------|-------------|
-| `oss.bucket` | Yes | - | OSS bucket name |
-| `oss.path` | No | - | Prefix to mount within the bucket |
-| `oss.endpoint` | Yes | - | OSS endpoint, for example `oss-cn-hangzhou.aliyuncs.com` |
-| `oss.access_key_id` | Yes | - | AccessKey ID |
-| `oss.access_key_secret` | Yes | - | AccessKey Secret |
-| `oss.security_token` | No | - | Security Token when using temporary STS credentials |
+| `aliyun_oss.bucket` | Yes | - | OSS bucket name |
+| `aliyun_oss.path` | No | - | Prefix to mount within the bucket |
+| `aliyun_oss.endpoint` | Yes | - | OSS endpoint, for example `oss-cn-hangzhou.aliyuncs.com` |
+| `aliyun_oss.access_key_id` | Yes | - | AccessKey ID |
+| `aliyun_oss.access_key_secret` | Yes | - | AccessKey Secret |
+| `aliyun_oss.security_token` | No | - | Security Token when using temporary STS credentials |
 
 OSS is object storage and does not provide complete POSIX filesystem semantics. Renames, random writes, and workloads with many small files may be slow; do not use it for databases or busy build directories. Prefer RAM or STS credentials scoped to the target bucket/prefix and protect the configuration file with mode `0600`.
 

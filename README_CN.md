@@ -1,11 +1,11 @@
 # gomount
 
-一个方便的 Linux 和 macOS 系统上管理 SMB/CIFS、SSHFS，以及 Linux-only WebDAV 和阿里云 OSS 挂载的命令行工具，提供交互式 TUI 界面。
+一个方便的 Linux 和 macOS 系统上管理 SMB/CIFS、SSHFS、WebDAV 和阿里云 OSS 挂载的命令行工具，提供交互式 TUI 界面。
 
 ## 特性
 
 - **简单配置**：在单个 YAML 文件中定义所有挂载
-- **多协议支持**：支持 SMB/CIFS、SSHFS，以及 Linux-only WebDAV 和阿里云 OSS
+- **多协议支持**：支持 SMB/CIFS、SSHFS、WebDAV 和阿里云 OSS
 - **交互式 TUI**：美观的终端界面用于浏览和选择共享
 - **挂载状态跟踪**：查看当前已挂载的共享
 - **交互式选择**：轻松选择挂载/卸载操作
@@ -44,9 +44,19 @@ sudo cp bin/gomount /usr/local/bin/
 - Linux：`mount.cifs` 命令（需安装 `cifs-utils` 软件包）— 用于 SMB 挂载
 - macOS：`mount_smbfs` 命令 — 用于 SMB 挂载
 - `sshfs` 命令 — 用于 SSHFS 挂载
-- Linux WebDAV proof 需要 FUSE 支持
+- Linux 云存储挂载需要 FUSE 支持
+- macOS 云存储挂载需要 macFUSE、CGO，以及使用 `-tags cmount` 构建的二进制
 - Linux SMB 挂载需要 `sudo` 权限
 - Go 1.25+ （从源码构建时需要）
+
+在 macOS 上使用 WebDAV 或 OSS 前，安装 macFUSE 并构建启用 macOS 挂载的二进制：
+
+```bash
+brew install --cask macfuse
+CGO_ENABLED=1 go build -tags cmount -o bin/gomount ./cmd/gomount
+```
+
+开发时使用 `CGO_ENABLED=1 go run -tags cmount ./cmd/gomount i`。普通 macOS 构建仍支持 SMB 和 SSHFS，但云存储挂载会返回包含正确构建参数的错误。
 
 ### 安装依赖
 
@@ -96,7 +106,7 @@ mounts:
       remote_path: /home/user/projects
     mount_dir_path: /mnt/dev
 
-  # WebDAV 挂载（Linux-only proof，由 gomount daemon 管理）
+  # WebDAV 挂载（由 gomount daemon 管理）
   - name: docs
     type: webdav
     webdav:
@@ -106,10 +116,10 @@ mounts:
       path: /team/docs              # WebDAV endpoint 下的可选路径
     mount_dir_path: ~/Mounts/docs
 
-  # 阿里云 OSS 挂载（Linux-only，由 gomount daemon 管理）
+  # 阿里云 OSS 挂载（由 gomount daemon 管理）
   - name: aliyun-archive
-    type: oss
-    oss:
+    type: aliyun_oss
+    aliyun_oss:
       bucket: my-bucket
       path: backups
       endpoint: oss-cn-hangzhou.aliyuncs.com
@@ -133,7 +143,7 @@ gomount config-example > ~/.config/gomount.yaml
 | 字段 | 必需 | 默认值 | 描述 |
 |-----|------|--------|------|
 | `name` | 是 | - | 此挂载的唯一标识符 |
-| `type` | 是 | - | 挂载类型（`smb`、`sshfs`、`webdav`、`oss`）。 |
+| `type` | 是 | - | 挂载类型（`smb`、`sshfs`、`webdav`、`aliyun_oss`）。 |
 | `mount_dir_path` | 是 | - | 挂载点的完整本地路径。支持 `~` 展开。 |
 
 #### Daemon（`daemon:` 块）
@@ -163,7 +173,7 @@ Linux 上如果 journald 收集 syslog，通常可用 `journalctl -t gomount-dae
 | `sshfs.host` | 是 | - | SSH 主机名或 `~/.ssh/config` 别名 |
 | `sshfs.remote_path` | 是 | - | 要挂载的远程目录路径 |
 
-#### WebDAV（`webdav:` 块，Linux-only proof）
+#### WebDAV（`webdav:` 块）
 
 | 字段 | 必需 | 默认值 | 描述 |
 |-----|------|--------|------|
@@ -172,16 +182,16 @@ Linux 上如果 journald 收集 syslog，通常可用 `journalctl -t gomount-dae
 | `webdav.password` | 否 | - | 登录密码 |
 | `webdav.path` | 否 | - | WebDAV endpoint 下的路径 |
 
-#### 阿里云 OSS（`oss:` 块，Linux-only）
+#### 阿里云 OSS（`aliyun_oss:` 块）
 
 | 字段 | 必需 | 默认值 | 描述 |
 |-----|------|--------|------|
-| `oss.bucket` | 是 | - | OSS Bucket 名称 |
-| `oss.path` | 否 | - | Bucket 下要挂载的前缀 |
-| `oss.endpoint` | 是 | - | OSS endpoint，例如 `oss-cn-hangzhou.aliyuncs.com` |
-| `oss.access_key_id` | 是 | - | AccessKey ID |
-| `oss.access_key_secret` | 是 | - | AccessKey Secret |
-| `oss.security_token` | 否 | - | 使用 STS 临时凭据时的 Security Token |
+| `aliyun_oss.bucket` | 是 | - | OSS Bucket 名称 |
+| `aliyun_oss.path` | 否 | - | Bucket 下要挂载的前缀 |
+| `aliyun_oss.endpoint` | 是 | - | OSS endpoint，例如 `oss-cn-hangzhou.aliyuncs.com` |
+| `aliyun_oss.access_key_id` | 是 | - | AccessKey ID |
+| `aliyun_oss.access_key_secret` | 是 | - | AccessKey Secret |
+| `aliyun_oss.security_token` | 否 | - | 使用 STS 临时凭据时的 Security Token |
 
 OSS 是对象存储，并不提供完整的 POSIX 文件系统语义。重命名、随机写入和大量小文件操作可能较慢，不建议用作数据库或高频编译目录。建议使用仅授予目标 Bucket/前缀权限的 RAM 或 STS 凭据，并将配置文件权限设为 `0600`。
 

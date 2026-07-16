@@ -35,15 +35,15 @@ func (e EntrySnapshot) Validate() error {
 	if e.Type == "webdav" && e.Source.URL == "" {
 		return fmt.Errorf("webdav source url is required")
 	}
-	if e.Type == "oss" {
+	if e.Type == "aliyun_oss" {
 		if e.Source.Bucket == "" {
-			return fmt.Errorf("oss source bucket is required")
+			return fmt.Errorf("aliyun_oss source bucket is required")
 		}
 		if e.Source.Endpoint == "" {
-			return fmt.Errorf("oss source endpoint is required")
+			return fmt.Errorf("aliyun_oss source endpoint is required")
 		}
 		if e.Source.AccessKeyID == "" || e.Source.AccessKeySecret == "" {
-			return fmt.Errorf("oss source access key id and secret are required")
+			return fmt.Errorf("aliyun_oss source access key id and secret are required")
 		}
 	}
 	return nil
@@ -102,9 +102,9 @@ type ErrorPayload struct {
 }
 
 func ManagedTypes() []string {
-	return []string{"webdav", "oss"}
+	return []string{"webdav", "aliyun_oss"}
 }
 
 func IsManagedType(t string) bool {
-	return t == "webdav" || t == "oss"
+	return t == "webdav" || t == "aliyun_oss"
 }
