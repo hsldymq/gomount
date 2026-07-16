@@ -313,6 +313,20 @@ func TestSnapshotsFromEntriesCanIncludeWebDAVPassword(t *testing.T) {
 	}
 }
 
+func TestOSSEntrySourceAndSnapshotCredentialRedaction(t *testing.T) {
+	entry := &config.MountEntry{Name: "archive", Type: "oss", MountDirPath: "/mnt/oss", OSS: &config.OSSConfig{
+		Bucket: "my-bucket", Path: "/team/backups/", Endpoint: "oss-cn-hangzhou.aliyuncs.com",
+		AccessKeyID: "id", AccessKeySecret: "secret", SecurityToken: "token",
+	}}
+	if got := entrySource(entry); got != "oss://my-bucket/team/backups@oss-cn-hangzhou.aliyuncs.com" {
+		t.Fatalf("entrySource() = %q", got)
+	}
+	snapshots := snapshotsFromEntries(entriesWithoutPasswords, []*config.MountEntry{entry})
+	if len(snapshots) != 1 || snapshots[0].Source.AccessKeyID != "" || snapshots[0].Source.AccessKeySecret != "" || snapshots[0].Source.SecurityToken != "" {
+		t.Fatalf("expected OSS credentials to be redacted, got %+v", snapshots)
+	}
+}
+
 func TestEntriesNeedSudoReturnsTrueWhenAnySelectedDriverNeedsSudo(t *testing.T) {
 	if runtime.GOOS != "linux" {
 		t.Skip("Linux-specific SMB sudo behavior")

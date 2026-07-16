@@ -3,10 +3,15 @@ package daemonapi
 import "fmt"
 
 type Source struct {
-	URL      string `json:"url"`
-	Username string `json:"username,omitempty"`
-	Password string `json:"password,omitempty"`
-	Path     string `json:"path,omitempty"`
+	URL             string `json:"url"`
+	Username        string `json:"username,omitempty"`
+	Password        string `json:"password,omitempty"`
+	Path            string `json:"path,omitempty"`
+	Bucket          string `json:"bucket,omitempty"`
+	Endpoint        string `json:"endpoint,omitempty"`
+	AccessKeyID     string `json:"access_key_id,omitempty"`
+	AccessKeySecret string `json:"access_key_secret,omitempty"`
+	SecurityToken   string `json:"security_token,omitempty"`
 }
 
 type EntrySnapshot struct {
@@ -29,6 +34,17 @@ func (e EntrySnapshot) Validate() error {
 	}
 	if e.Type == "webdav" && e.Source.URL == "" {
 		return fmt.Errorf("webdav source url is required")
+	}
+	if e.Type == "oss" {
+		if e.Source.Bucket == "" {
+			return fmt.Errorf("oss source bucket is required")
+		}
+		if e.Source.Endpoint == "" {
+			return fmt.Errorf("oss source endpoint is required")
+		}
+		if e.Source.AccessKeyID == "" || e.Source.AccessKeySecret == "" {
+			return fmt.Errorf("oss source access key id and secret are required")
+		}
 	}
 	return nil
 }
@@ -86,9 +102,9 @@ type ErrorPayload struct {
 }
 
 func ManagedTypes() []string {
-	return []string{"webdav"}
+	return []string{"webdav", "oss"}
 }
 
 func IsManagedType(t string) bool {
-	return t == "webdav"
+	return t == "webdav" || t == "oss"
 }

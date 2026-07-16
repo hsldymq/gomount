@@ -121,3 +121,20 @@ func TestMountEntry_ValidateDriverConfigRejectsWebDAVURLUserinfo(t *testing.T) {
 		t.Fatalf("expected userinfo error, got %v", err)
 	}
 }
+
+func TestMountEntryValidateDriverConfigAcceptsOSS(t *testing.T) {
+	entry := MountEntry{Name: "archive", Type: "oss", OSS: &OSSConfig{
+		Bucket: "my-bucket", Endpoint: "oss-cn-hangzhou.aliyuncs.com", AccessKeyID: "id", AccessKeySecret: "secret",
+	}}
+	if err := entry.ValidateDriverConfig(); err != nil {
+		t.Fatalf("expected oss config to be accepted, got %v", err)
+	}
+}
+
+func TestMountEntryValidateDriverConfigRejectsIncompleteOSS(t *testing.T) {
+	entry := MountEntry{Name: "archive", Type: "oss", OSS: &OSSConfig{Bucket: "my-bucket"}}
+	err := entry.ValidateDriverConfig()
+	if err == nil || !strings.Contains(err.Error(), "oss.endpoint is required") {
+		t.Fatalf("expected missing endpoint error, got %v", err)
+	}
+}

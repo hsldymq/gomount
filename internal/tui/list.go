@@ -3,6 +3,7 @@ package tui
 import (
 	"fmt"
 	"net/url"
+	"strings"
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/lipgloss/table"
@@ -17,8 +18,18 @@ func entryAddr(entry config.MountEntry) string {
 		return fmt.Sprintf("%s:%s", entry.SSHFS.Host, entry.SSHFS.RemotePath)
 	case entry.WebDAV != nil:
 		return webdavAddr(entry.WebDAV.URL, entry.WebDAV.Path)
+	case entry.OSS != nil:
+		return ossAddr(entry.OSS)
 	}
 	return ""
+}
+
+func ossAddr(cfg *config.OSSConfig) string {
+	root := cfg.Bucket
+	if cfg.Path != "" {
+		root += "/" + strings.Trim(cfg.Path, "/")
+	}
+	return fmt.Sprintf("oss://%s@%s", root, cfg.Endpoint)
 }
 
 func webdavAddr(rawURL, path string) string {

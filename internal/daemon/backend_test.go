@@ -89,6 +89,18 @@ func TestSessionManagerRejectsInvalidWebDAVSnapshot(t *testing.T) {
 	}
 }
 
+func TestSessionManagerMountsOSSWithFakeMounter(t *testing.T) {
+	fake := &fakeMounter{}
+	mgr := NewSessionManager(fake)
+	entry := daemonapi.EntrySnapshot{Name: "archive", Type: "oss", MountDirPath: "/mnt/oss", Source: daemonapi.Source{
+		Bucket: "my-bucket", Endpoint: "oss-cn-hangzhou.aliyuncs.com", AccessKeyID: "id", AccessKeySecret: "secret",
+	}}
+	result := mgr.Mount(entry)
+	if !result.Success || !result.Mounted {
+		t.Fatalf("expected successful OSS mount, got %+v", result)
+	}
+}
+
 func TestSessionManagerMountedSessionCount(t *testing.T) {
 	mgr := NewSessionManager(&fakeMounter{})
 	entry := daemonapi.EntrySnapshot{Name: "docs", Type: "webdav", MountDirPath: "/mnt/docs", Source: daemonapi.Source{URL: "https://cloud.example.com/dav"}}

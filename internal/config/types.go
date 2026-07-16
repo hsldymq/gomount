@@ -41,6 +41,7 @@ type MountEntry struct {
 	SMB    *SMBConfig    `yaml:"smb,omitempty" mapstructure:"smb"`
 	SSHFS  *SSHFSConfig  `yaml:"sshfs,omitempty" mapstructure:"sshfs"`
 	WebDAV *WebDAVConfig `yaml:"webdav,omitempty" mapstructure:"webdav"`
+	OSS    *OSSConfig    `yaml:"oss,omitempty" mapstructure:"oss"`
 
 	SSHTunnel *SSHTunnelConfig `yaml:"ssh_tunnel,omitempty" mapstructure:"ssh_tunnel"`
 
@@ -68,6 +69,16 @@ type WebDAVConfig struct {
 	Username string `yaml:"username,omitempty" mapstructure:"username"`
 	Password string `yaml:"password,omitempty" mapstructure:"password"`
 	Path     string `yaml:"path,omitempty" mapstructure:"path"`
+}
+
+// OSSConfig configures an Alibaba Cloud OSS bucket through rclone's S3 backend.
+type OSSConfig struct {
+	Bucket          string `yaml:"bucket" mapstructure:"bucket" validate:"required"`
+	Path            string `yaml:"path,omitempty" mapstructure:"path"`
+	Endpoint        string `yaml:"endpoint" mapstructure:"endpoint" validate:"required"`
+	AccessKeyID     string `yaml:"access_key_id" mapstructure:"access_key_id" validate:"required"`
+	AccessKeySecret string `yaml:"access_key_secret" mapstructure:"access_key_secret" validate:"required"`
+	SecurityToken   string `yaml:"security_token,omitempty" mapstructure:"security_token"`
 }
 
 type SSHTunnelConfig struct {
@@ -133,6 +144,22 @@ func (m *MountEntry) ValidateDriverConfig() error {
 		}
 		if parsedURL.User != nil {
 			return fmt.Errorf("mount entry '%s': webdav.url must not include credentials; use webdav.username and webdav.password", m.Name)
+		}
+	case "oss":
+		if m.OSS == nil {
+			return fmt.Errorf("mount entry '%s': type is 'oss' but 'oss' config is missing", m.Name)
+		}
+		if m.OSS.Bucket == "" {
+			return fmt.Errorf("mount entry '%s': oss.bucket is required", m.Name)
+		}
+		if m.OSS.Endpoint == "" {
+			return fmt.Errorf("mount entry '%s': oss.endpoint is required", m.Name)
+		}
+		if m.OSS.AccessKeyID == "" {
+			return fmt.Errorf("mount entry '%s': oss.access_key_id is required", m.Name)
+		}
+		if m.OSS.AccessKeySecret == "" {
+			return fmt.Errorf("mount entry '%s': oss.access_key_secret is required", m.Name)
 		}
 	default:
 		return fmt.Errorf("mount entry '%s': unknown type '%s'", m.Name, m.Type)

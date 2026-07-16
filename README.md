@@ -1,11 +1,11 @@
 # gomount
 
-A convenient CLI tool for managing SMB/CIFS, SSHFS, and a Linux-only WebDAV daemon proof with an interactive TUI.
+A convenient CLI tool for managing SMB/CIFS, SSHFS, and Linux-only WebDAV and Alibaba Cloud OSS mounts with an interactive TUI.
 
 ## Features
 
 - **Simple Configuration**: Define all your mounts in a single YAML file
-- **Multiple Protocols**: Supports SMB/CIFS, SSHFS, and Linux-only WebDAV daemon proof
+- **Multiple Protocols**: Supports SMB/CIFS, SSHFS, and Linux-only WebDAV and Alibaba Cloud OSS
 - **Interactive TUI**: Beautiful terminal UI for browsing and selecting shares
 - **Mount Status Tracking**: Check which shares are currently mounted
 - **Interactive Selection**: Easy selection for mount/unmount operations
@@ -106,6 +106,18 @@ mounts:
       path: /team/docs              # optional path under the WebDAV endpoint
     mount_dir_path: ~/Mounts/docs
 
+  # Alibaba Cloud OSS mount (Linux-only, managed by gomount daemon)
+  - name: aliyun-archive
+    type: oss
+    oss:
+      bucket: my-bucket
+      path: backups
+      endpoint: oss-cn-hangzhou.aliyuncs.com
+      access_key_id: your-access-key-id
+      access_key_secret: your-access-key-secret
+      # security_token: your-sts-token
+    mount_dir_path: ~/Mounts/aliyun-archive
+
 ```
 
 You can generate a full example config with:
@@ -121,7 +133,7 @@ gomount config-example > ~/.config/gomount.yaml
 | Field | Required | Default | Description |
 |-------|----------|---------|-------------|
 | `name` | Yes | - | Unique identifier for this mount |
-| `type` | Yes | - | Mount type (`smb`, `sshfs`, `webdav`). |
+| `type` | Yes | - | Mount type (`smb`, `sshfs`, `webdav`, `oss`). |
 | `mount_dir_path` | Yes | - | Full local path for the mount point. Supports `~` expansion. |
 
 #### Daemon (`daemon:` block)
@@ -159,6 +171,19 @@ On Linux, syslog messages are usually visible with `journalctl -t gomount-daemon
 | `webdav.username` | No | - | Login username |
 | `webdav.password` | No | - | Login password |
 | `webdav.path` | No | - | Path under the WebDAV endpoint |
+
+#### Alibaba Cloud OSS (`oss:` block, Linux-only)
+
+| Field | Required | Default | Description |
+|-------|----------|---------|-------------|
+| `oss.bucket` | Yes | - | OSS bucket name |
+| `oss.path` | No | - | Prefix to mount within the bucket |
+| `oss.endpoint` | Yes | - | OSS endpoint, for example `oss-cn-hangzhou.aliyuncs.com` |
+| `oss.access_key_id` | Yes | - | AccessKey ID |
+| `oss.access_key_secret` | Yes | - | AccessKey Secret |
+| `oss.security_token` | No | - | Security Token when using temporary STS credentials |
+
+OSS is object storage and does not provide complete POSIX filesystem semantics. Renames, random writes, and workloads with many small files may be slow; do not use it for databases or busy build directories. Prefer RAM or STS credentials scoped to the target bucket/prefix and protect the configuration file with mode `0600`.
 
 ## Usage
 
@@ -224,13 +249,13 @@ gomount -c /path/to/config.yaml list
 
 ### Daemon Management
 
-WebDAV mounts are managed by the gomount daemon. Check whether it is running:
+WebDAV and OSS mounts are managed by the gomount daemon. Check whether it is running:
 
 ```bash
 gomount daemon status
 ```
 
-Stop the daemon gracefully. Active WebDAV sessions are unmounted first; if any unmount fails, the daemon keeps running and reports the failed session.
+Stop the daemon gracefully. Active WebDAV and OSS sessions are unmounted first; if any unmount fails, the daemon keeps running and reports the failed session.
 
 ```bash
 gomount daemon down

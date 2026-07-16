@@ -5,10 +5,13 @@ package daemon
 import (
 	"context"
 	"fmt"
+	"path"
 
+	"github.com/rclone/rclone/backend/s3"
 	"github.com/rclone/rclone/backend/webdav"
 	_ "github.com/rclone/rclone/cmd/mount"
 	"github.com/rclone/rclone/cmd/mountlib"
+	"github.com/rclone/rclone/fs"
 	"github.com/rclone/rclone/fs/config/configfile"
 	"github.com/rclone/rclone/fs/config/configmap"
 	"github.com/rclone/rclone/fs/config/obscure"
@@ -25,7 +28,7 @@ func NewRcloneMounter() Mounter {
 }
 
 func SupportedManagedTypes() []string {
-	return []string{"webdav"}
+	return daemonapi.ManagedTypes()
 }
 
 func (m *RcloneMounter) Mount(entry daemonapi.EntrySnapshot) (MountSession, error) {
@@ -33,18 +36,16 @@ func (m *RcloneMounter) Mount(entry daemonapi.EntrySnapshot) (MountSession, erro
 	if mountFn == nil {
 		return nil, fmt.Errorf("rclone mount backend is not registered")
 	}
-	backendConfig := configmap.Simple{
-		"type":   "webdav",
-		"url":    entry.Source.URL,
-		"vendor": "other",
+	var f fs.Fs
+	var err error
+	switch entry.Type {
+	case "webdav":
+		f, err = newWebDAVFs(entry)
+	case "oss":
+		f, err = newOSSFs(entry)
+	default:
+		return nil, fmt.Errorf("unsupported rclone backend type %q", entry.Type)
 	}
-	if entry.Source.Username != "" {
-		backendConfig["user"] = entry.Source.Username
-	}
-	if entry.Source.Password != "" {
-		backendConfig["pass"] = obscure.MustObscure(entry.Source.Password)
-	}
-	f, err := webdav.NewFs(context.Background(), entry.Name, entry.Source.Path, backendConfig)
 	if err != nil {
 		return nil, err
 	}
@@ -54,6 +55,57 @@ func (m *RcloneMounter) Mount(entry daemonapi.EntrySnapshot) (MountSession, erro
 		return nil, err
 	}
 	return &rcloneMountSession{mountPoint: mountPoint}, nil
+}
+
+func newWebDAVFs(entry daemonapi.EntrySnapshot) (fs.Fs, error) {
+	values := configmap.Simple{
+		"type":   "webdav",
+		"url":    entry.Source.URL,
+		"vendor": "other",
+	}
+	if entry.Source.Username != "" {
+		values["user"] = entry.Source.Username
+	}
+	if entry.Source.Password != "" {
+		values["pass"] = obscure.MustObscure(entry.Source.Password)
+	}
+	backendConfig, err := backendConfigWithDefaults("webdav", values)
+	if err != nil {
+		return nil, err
+	}
+	return webdav.NewFs(context.Background(), entry.Name, entry.Source.Path, backendConfig)
+}
+
+func newOSSFs(entry daemonapi.EntrySnapshot) (fs.Fs, error) {
+	values := configmap.Simple{
+		"type":              "s3",
+		"provider":          "Alibaba",
+		"endpoint":          entry.Source.Endpoint,
+		"access_key_id":     entry.Source.AccessKeyID,
+		"secret_access_key": entry.Source.AccessKeySecret,
+		"env_auth":          "false",
+	}
+	if entry.Source.SecurityToken != "" {
+		values["session_token"] = entry.Source.SecurityToken
+	}
+	backendConfig, err := backendConfigWithDefaults("s3", values)
+	if err != nil {
+		return nil, err
+	}
+	root := path.Join(entry.Source.Bucket, entry.Source.Path)
+	return s3.NewFs(context.Background(), entry.Name, root, backendConfig)
+}
+
+// backendConfigWithDefaults builds the same layered configuration map used by
+// rclone's normal remote loader. Calling a backend's NewFs with a Simple map
+// alone leaves typed options at their Go zero values (for example S3's 5 MiB
+// chunk size), because backend defaults live in the registry metadata.
+func backendConfigWithDefaults(backendType string, values configmap.Simple) (configmap.Mapper, error) {
+	info, err := fs.Find(backendType)
+	if err != nil {
+		return nil, fmt.Errorf("find rclone backend %q: %w", backendType, err)
+	}
+	return fs.ConfigMap(info.Prefix, info.Options, "", values), nil
 }
 
 type rcloneMountSession struct {

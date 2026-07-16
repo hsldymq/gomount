@@ -1,11 +1,11 @@
 # gomount
 
-一个方便的 Linux 和 macOS 系统上管理 SMB/CIFS、SSHFS，以及 Linux-only WebDAV daemon proof 的命令行工具，提供交互式 TUI 界面。
+一个方便的 Linux 和 macOS 系统上管理 SMB/CIFS、SSHFS，以及 Linux-only WebDAV 和阿里云 OSS 挂载的命令行工具，提供交互式 TUI 界面。
 
 ## 特性
 
 - **简单配置**：在单个 YAML 文件中定义所有挂载
-- **多协议支持**：支持 SMB/CIFS、SSHFS 和 Linux-only WebDAV daemon proof
+- **多协议支持**：支持 SMB/CIFS、SSHFS，以及 Linux-only WebDAV 和阿里云 OSS
 - **交互式 TUI**：美观的终端界面用于浏览和选择共享
 - **挂载状态跟踪**：查看当前已挂载的共享
 - **交互式选择**：轻松选择挂载/卸载操作
@@ -106,6 +106,18 @@ mounts:
       path: /team/docs              # WebDAV endpoint 下的可选路径
     mount_dir_path: ~/Mounts/docs
 
+  # 阿里云 OSS 挂载（Linux-only，由 gomount daemon 管理）
+  - name: aliyun-archive
+    type: oss
+    oss:
+      bucket: my-bucket
+      path: backups
+      endpoint: oss-cn-hangzhou.aliyuncs.com
+      access_key_id: your-access-key-id
+      access_key_secret: your-access-key-secret
+      # security_token: your-sts-token
+    mount_dir_path: ~/Mounts/aliyun-archive
+
 ```
 
 可以使用以下命令生成完整的配置文件示例：
@@ -121,7 +133,7 @@ gomount config-example > ~/.config/gomount.yaml
 | 字段 | 必需 | 默认值 | 描述 |
 |-----|------|--------|------|
 | `name` | 是 | - | 此挂载的唯一标识符 |
-| `type` | 是 | - | 挂载类型（`smb`、`sshfs`、`webdav`）。 |
+| `type` | 是 | - | 挂载类型（`smb`、`sshfs`、`webdav`、`oss`）。 |
 | `mount_dir_path` | 是 | - | 挂载点的完整本地路径。支持 `~` 展开。 |
 
 #### Daemon（`daemon:` 块）
@@ -159,6 +171,19 @@ Linux 上如果 journald 收集 syslog，通常可用 `journalctl -t gomount-dae
 | `webdav.username` | 否 | - | 登录用户名 |
 | `webdav.password` | 否 | - | 登录密码 |
 | `webdav.path` | 否 | - | WebDAV endpoint 下的路径 |
+
+#### 阿里云 OSS（`oss:` 块，Linux-only）
+
+| 字段 | 必需 | 默认值 | 描述 |
+|-----|------|--------|------|
+| `oss.bucket` | 是 | - | OSS Bucket 名称 |
+| `oss.path` | 否 | - | Bucket 下要挂载的前缀 |
+| `oss.endpoint` | 是 | - | OSS endpoint，例如 `oss-cn-hangzhou.aliyuncs.com` |
+| `oss.access_key_id` | 是 | - | AccessKey ID |
+| `oss.access_key_secret` | 是 | - | AccessKey Secret |
+| `oss.security_token` | 否 | - | 使用 STS 临时凭据时的 Security Token |
+
+OSS 是对象存储，并不提供完整的 POSIX 文件系统语义。重命名、随机写入和大量小文件操作可能较慢，不建议用作数据库或高频编译目录。建议使用仅授予目标 Bucket/前缀权限的 RAM 或 STS 凭据，并将配置文件权限设为 `0600`。
 
 ## 使用方法
 
@@ -224,7 +249,7 @@ gomount -c /path/to/config.yaml list
 
 ### Daemon 管理
 
-WebDAV 挂载由 gomount daemon 管理。查看 daemon 是否运行：
+WebDAV 和 OSS 挂载由 gomount daemon 管理。查看 daemon 是否运行：
 
 ```bash
 gomount daemon status

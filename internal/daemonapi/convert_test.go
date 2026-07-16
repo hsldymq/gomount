@@ -38,3 +38,17 @@ func TestFromMountEntryReturnsUnmanagedSnapshotForSMB(t *testing.T) {
 		t.Fatalf("unexpected unmanaged snapshot: %+v", snapshot)
 	}
 }
+
+func TestFromMountEntryConvertsOSS(t *testing.T) {
+	entry := config.MountEntry{Name: "archive", Type: "oss", MountDirPath: "/mnt/oss", OSS: &config.OSSConfig{
+		Bucket: "my-bucket", Path: "backups", Endpoint: "oss-cn-hangzhou.aliyuncs.com",
+		AccessKeyID: "id", AccessKeySecret: "secret", SecurityToken: "token",
+	}}
+	snapshot, ok := FromMountEntry(&entry)
+	if !ok {
+		t.Fatal("expected oss entry to convert")
+	}
+	if snapshot.Source.Bucket != "my-bucket" || snapshot.Source.Path != "backups" || snapshot.Source.Endpoint != "oss-cn-hangzhou.aliyuncs.com" || snapshot.Source.AccessKeyID != "id" || snapshot.Source.AccessKeySecret != "secret" || snapshot.Source.SecurityToken != "token" {
+		t.Fatalf("unexpected snapshot: %+v", snapshot)
+	}
+}

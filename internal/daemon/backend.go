@@ -2,6 +2,7 @@ package daemon
 
 import (
 	"fmt"
+	"sort"
 	"sync"
 
 	"github.com/hsldymq/gomount/internal/daemonapi"
@@ -49,6 +50,7 @@ func (m *SessionManager) ManagedTypes() []string {
 	for t := range m.managedTypes {
 		types = append(types, t)
 	}
+	sort.Strings(types)
 	return types
 }
 
@@ -121,7 +123,7 @@ func (m *SessionManager) Mount(entry daemonapi.EntrySnapshot) daemonapi.Operatio
 			Message:      "mount failed",
 			Error: &daemonapi.ErrorPayload{
 				Code:    "backend_mount_failed",
-				Message: "failed to mount webdav backend",
+				Message: fmt.Sprintf("failed to mount %s backend", entry.Type),
 				Detail:  err.Error(),
 			},
 		}
@@ -179,7 +181,7 @@ func (m *SessionManager) Unmount(entry daemonapi.EntrySnapshot) daemonapi.Operat
 			Message:      "unmount failed",
 			Error: &daemonapi.ErrorPayload{
 				Code:    "backend_unmount_failed",
-				Message: "failed to unmount webdav backend",
+				Message: fmt.Sprintf("failed to unmount %s backend", entry.Type),
 				Detail:  err.Error(),
 			},
 		}

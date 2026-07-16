@@ -396,7 +396,7 @@ func entriesNeedSudo(mgr *drivers.Manager, entries []*config.MountEntry) (bool, 
 }
 
 func isDaemonManagedEntry(entry *config.MountEntry) bool {
-	return entry != nil && entry.Type == "webdav"
+	return entry != nil && daemonapi.IsManagedType(entry.Type)
 }
 
 func splitDaemonManagedEntries(entries []*config.MountEntry) (local, managed []*config.MountEntry) {
@@ -421,9 +421,22 @@ func entrySource(entry *config.MountEntry) string {
 			return ""
 		}
 		return webdavSource(entry.WebDAV.URL, entry.WebDAV.Path)
+	case "oss":
+		if entry.OSS == nil {
+			return ""
+		}
+		return ossSource(entry.OSS)
 	default:
 		return ""
 	}
+}
+
+func ossSource(cfg *config.OSSConfig) string {
+	root := cfg.Bucket
+	if cfg.Path != "" {
+		root += "/" + strings.Trim(cfg.Path, "/")
+	}
+	return fmt.Sprintf("oss://%s@%s", root, cfg.Endpoint)
 }
 
 func webdavSource(rawURL, path string) string {
@@ -663,6 +676,9 @@ func snapshotsFromEntries(passwordMode snapshotPasswordMode, entries []*config.M
 		snapshot, _ := daemonapi.FromMountEntry(entry)
 		if passwordMode == entriesWithoutPasswords {
 			snapshot.Source.Password = ""
+			snapshot.Source.AccessKeyID = ""
+			snapshot.Source.AccessKeySecret = ""
+			snapshot.Source.SecurityToken = ""
 		}
 		snapshots = append(snapshots, snapshot)
 	}

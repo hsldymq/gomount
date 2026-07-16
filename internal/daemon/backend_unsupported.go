@@ -19,5 +19,5 @@ func SupportedManagedTypes() []string {
 }
 
 func (m *RcloneMounter) Mount(entry daemonapi.EntrySnapshot) (MountSession, error) {
-	return nil, fmt.Errorf("embedded rclone webdav mount is only supported on Linux in this proof")
+	return nil, fmt.Errorf("embedded rclone managed mounts are only supported on Linux")
 }
