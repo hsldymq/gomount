@@ -31,7 +31,7 @@ func SupportedManagedTypes() []string {
 }
 
 func (m *RcloneMounter) Mount(entry daemonapi.EntrySnapshot) (MountSession, error) {
-	_, mountFn := mountlib.ResolveMountMethod("mount")
+	_, mountFn := mountlib.ResolveMountMethod("")
 	if mountFn == nil {
 		return nil, fmt.Errorf("rclone mount backend is not registered")
 	}
