@@ -25,8 +25,16 @@ make install
 
 ### 使用 Go 安装
 
-```bash
+Linux下执行
+
+```sh
 go install github.com/hsldymq/gomount/cmd/gomount@latest
+```
+
+MacOS下执行
+
+```sh
+CGO_ENABLED=1 go install -tags cmount github.com/hsldymq/gomount/cmd/gomount@latest
 ```
 
 ### 手动安装
