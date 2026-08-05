@@ -1,396 +1,107 @@
 # gomount
 
-A convenient CLI tool for managing SMB/CIFS, SSHFS, WebDAV, and Alibaba Cloud OSS mounts with an interactive TUI.
+`gomount` 是一个面向 Linux 和 macOS 的挂载管理工具。
 
-## Features
+如果你经常需要连接 NAS、远程服务器或云存储，却不想反复查找和输入冗长的挂载命令，可以把连接信息统一写进配置文件，再通过交互式TUI界面选择、挂载和卸载。
 
-- **Simple Configuration**: Define all your mounts in a single YAML file
-- **Multiple Protocols**: Supports SMB/CIFS, SSHFS, WebDAV, and Alibaba Cloud OSS
-- **Interactive TUI**: Beautiful terminal UI for browsing and selecting shares
-- **Mount Status Tracking**: Check which shares are currently mounted
-- **Interactive Selection**: Easy selection for mount/unmount operations
-- **Password Prompting**: Secure password input with visual feedback
-- **Privilege Escalation**: Automatic sudo handling when needed
-- **Mount Point Management**: Automatic directory creation and cleanup
+支持的挂载种类:
+- SMB/CIFS
+- SSHFS
+- WebDAV
+- 阿里云OSS
 
-## Installation
+## 安装gomount
 
-### From Source
+### 系统要求
 
+- Linux下gomount在挂载SMB/CIFS是需要使用到`mount.cifs`命令, 挂载sshfs时需要使用到sshfs命令,因此需要安装相关依赖
+- Linux SMB 挂载需要 `sudo` 权限
+- macOS 云存储挂载需要 macFUSE、CGO，以及使用 `-tags cmount` 构建的二进制
+
+### 在Linux上安装gomount
+
+**安装依赖**
 ```bash
-git clone https://github.com/hsldymq/gomount.git
-cd gomount
-make install
-```
-
-### Using Go
-
-For Linux
-
-```sh
-go install github.com/hsldymq/gomount/cmd/gomount@latest
-```
-
-For MacOS
-```sh
-CGO_ENABLED=1 go install -tags cmount github.com/hsldymq/gomount/cmd/gomount@latest
-```
-
-### Manual Installation
-
-```bash
-git clone https://github.com/hsldymq/gomount.git
-cd gomount
-make build
-sudo cp bin/gomount /usr/local/bin/
-```
-
-## Requirements
-
-- Linux or macOS operating system
-- Linux: `mount.cifs` command (install `cifs-utils` package) — for SMB mounts
-- macOS: `mount_smbfs` command — for SMB mounts
-- `sshfs` command — for SSHFS mounts
-- Linux cloud mounts require FUSE support
-- macOS cloud mounts require macFUSE, CGO, and a binary built with `-tags cmount`
-- Linux SMB mounts require `sudo` access
-- Go 1.25+ (for building from source)
-
-For WebDAV and OSS mounts on macOS, install macFUSE and build the macOS-enabled binary:
-
-```bash
-brew install --cask macfuse
-CGO_ENABLED=1 go build -tags cmount -o bin/gomount ./cmd/gomount
-```
-
-During development use `CGO_ENABLED=1 go run -tags cmount ./cmd/gomount i`. A regular macOS build still supports SMB and SSHFS, but cloud mounts return an actionable build error.
-
-### Install Dependencies
-
-On Debian/Ubuntu:
-```bash
+# Debian/Ubuntu
 sudo apt-get install cifs-utils sshfs
-```
 
-On Fedora/RHEL:
-```bash
+# Fedora/RHEL
 sudo dnf install cifs-utils fuse-sshfs
-```
 
-On Arch Linux:
-```bash
+# Arch Linux
 sudo pacman -S cifs-utils sshfs
 ```
 
-## Configuration
+**安装gomount**
+```bash
+go install github.com/hsldymq/gomount/cmd/gomount@latest
+```
 
-Create a configuration file at `~/.config/gomount.yaml`:
+## macOS上安装gomount
+
+**安装依赖**
+```zsh
+brew install --cask macfuse
+```
+
+**安装gomount**
+```zsh
+CGO_ENABLED=1 go install -tags cmount github.com/hsldymq/gomount/cmd/gomount@latest
+```
+
+## 配置
+
+配置文件用于保存常用的挂载信息。配置一次后，就可以通过交互界面选择挂载项，或直接执行 `gomount mount <名称>`，不必每次重新输入服务器地址、远程路径和挂载位置。
+
+gomount 默认读取 `~/.config/gomount.yaml`。也可以使用 `-c` 指定其他配置文件：
+
+```bash
+gomount -c /path/to/config.yaml
+```
+
+一个完整的示例配置见[gomount.example.yaml](./examples/gomount.example.yaml)
+
+### 基本结构
+
+配置文件以 `mounts` 开始，其中每一项代表一个可以独立挂载的资源：
 
 ```yaml
-daemon:
-  log_target: syslog                 # syslog, file, or stderr; default syslog
-  # log_file: ~/.local/share/gomount/gomount-daemon.log
-  # socket_path: ~/.local/share/gomount/gomount.sock
+mounts:
+  - name: dev
+    type: sshfs
+    mount_dir_path: ~/Mounts/dev
+    sshfs:
+      host: dev.example.com
+      remote_path: /home/user/projects
+```
+
+每个挂载项只需要关注几个关键部分:
+
+- `name`：挂载项的名称，用于在界面和命令中识别它；名称不能重复。
+- `type`：挂载类型，例如 `smb` 或 `sshfs`。
+- `mount_dir_path`：资源在本机的挂载位置，支持以 `~` 表示用户目录。
+- 与 `type` 同名的配置块：保存连接该资源所需的信息。不同挂载类型需要的字段不同。
+
+### 引用其他配置
+
+当挂载项较多时，可以使用 `include` 把配置拆分到多个文件中：
+
+```yaml
+# ~/.config/gomount.yaml
+include:
+  - mounts/work.yaml
+  - mounts/personal/*.yaml
 
 mounts:
-  # SMB/CIFS mount
-  - name: nas
+  - name: local-nas
     type: smb
+    mount_dir_path: ~/Mounts/nas
     smb:
-      addr: 192.168.1.100
-      # port: 445                   # optional, default 445
-      share_name: shared_folder
+      addr: nas.local
+      share_name: data
       username: user
-      # password: pass              # optional, prompts interactively if omitted
-    mount_dir_path: /mnt/nas
-
-  # SSHFS mount
-  # Connection details (username, port, keys, etc.) are managed by ~/.ssh/config
-  - name: dev-server
-    type: sshfs
-    sshfs:
-      host: dev.example.com         # ~/.ssh/config alias or hostname
-      remote_path: /home/user/projects
-    mount_dir_path: /mnt/dev
-
-  # WebDAV mount (managed by gomount daemon)
-  - name: docs
-    type: webdav
-    webdav:
-      url: https://cloud.example.com/remote.php/dav/files/user/
-      username: user                # optional
-      password: pass                # optional
-      path: /team/docs              # optional path under the WebDAV endpoint
-    mount_dir_path: ~/Mounts/docs
-
-  # Alibaba Cloud OSS mount (managed by gomount daemon)
-  - name: aliyun-archive
-    type: aliyun_oss
-    aliyun_oss:
-      bucket: my-bucket
-      path: backups
-      endpoint: oss-cn-hangzhou.aliyuncs.com
-      access_key_id: your-access-key-id
-      access_key_secret: your-access-key-secret
-      # security_token: your-sts-token
-    mount_dir_path: ~/Mounts/aliyun-archive
-
 ```
 
-You can generate a full example config with:
+被引用的文件仍然使用相同的 `mounts` 结构。`include` 支持单个文件和通配符，也可以继续引用其他配置；相对路径以当前配置文件所在目录为基准，同时支持绝对路径和以 `~` 开头的路径。
 
-```bash
-gomount config-example > ~/.config/gomount.yaml
-```
-
-### Configuration Options
-
-#### Common Fields
-
-| Field | Required | Default | Description |
-|-------|----------|---------|-------------|
-| `name` | Yes | - | Unique identifier for this mount |
-| `type` | Yes | - | Mount type (`smb`, `sshfs`, `webdav`, `aliyun_oss`). |
-| `mount_dir_path` | Yes | - | Full local path for the mount point. Supports `~` expansion. |
-
-#### Daemon (`daemon:` block)
-
-| Field | Required | Default | Description |
-|-------|----------|---------|-------------|
-| `daemon.log_target` | No | `syslog` | Daemon output target. `syslog` falls back to `stderr` if unavailable. Use `file` for a fixed log file or `stderr` for debugging. |
-| `daemon.log_file` | No | `~/.local/share/gomount/gomount-daemon.log` | Log file used when `log_target` is `file`. |
-| `daemon.socket_path` | No | `~/.local/share/gomount/gomount.sock` | Unix socket path used by CLI and daemon. Use the same config file for mount/status/down when customized. |
-
-On Linux, syslog messages are usually visible with `journalctl -t gomount-daemon -f` when journald collects syslog. On macOS, gomount uses the system syslog compatibility path and does not require Unified Logging integration.
-
-#### SMB (`smb:` block)
-
-| Field | Required | Default | Description |
-|-------|----------|---------|-------------|
-| `smb.addr` | Yes | - | SMB server address |
-| `smb.port` | No | 445 | SMB server port |
-| `smb.share_name` | Yes | - | Share name on the server |
-| `smb.username` | Yes | - | Login username |
-| `smb.password` | No | - | Login password (prompts if empty) |
-
-#### SSHFS (`sshfs:` block)
-
-| Field | Required | Default | Description |
-|-------|----------|---------|-------------|
-| `sshfs.host` | Yes | - | SSH hostname or `~/.ssh/config` alias |
-| `sshfs.remote_path` | Yes | - | Remote directory path to mount |
-
-#### WebDAV (`webdav:` block)
-
-| Field | Required | Default | Description |
-|-------|----------|---------|-------------|
-| `webdav.url` | Yes | - | WebDAV endpoint URL |
-| `webdav.username` | No | - | Login username |
-| `webdav.password` | No | - | Login password |
-| `webdav.path` | No | - | Path under the WebDAV endpoint |
-
-#### Alibaba Cloud OSS (`aliyun_oss:` block)
-
-| Field | Required | Default | Description |
-|-------|----------|---------|-------------|
-| `aliyun_oss.bucket` | Yes | - | OSS bucket name |
-| `aliyun_oss.path` | No | - | Prefix to mount within the bucket |
-| `aliyun_oss.endpoint` | Yes | - | OSS endpoint, for example `oss-cn-hangzhou.aliyuncs.com` |
-| `aliyun_oss.access_key_id` | Yes | - | AccessKey ID |
-| `aliyun_oss.access_key_secret` | Yes | - | AccessKey Secret |
-| `aliyun_oss.security_token` | No | - | Security Token when using temporary STS credentials |
-
-OSS is object storage and does not provide complete POSIX filesystem semantics. Renames, random writes, and workloads with many small files may be slow; do not use it for databases or busy build directories. Prefer RAM or STS credentials scoped to the target bucket/prefix and protect the configuration file with mode `0600`.
-
-## Usage
-
-### List All Mounts
-
-Display all configured shares with their mount status:
-
-```bash
-gomount list
-# or
-gomount -l
-```
-
-### Mount Shares
-
-Mount a specific share by name:
-
-```bash
-gomount mount nas1
-# or
-gomount -m nas1
-```
-
-Interactive selection with multi-select support:
-- Use `space` to toggle selection on multiple shares
-- Press `enter` to confirm and mount all selected shares
-
-```bash
-gomount mount
-# or
-gomount -m
-```
-
-**Note**: When mounting multiple shares, if one fails the others will continue. A summary is shown at the end.
-
-### Unmount Shares
-
-Unmount a specific share by name:
-
-```bash
-gomount umount nas1
-# or
-gomount -u nas1
-```
-
-Interactive selection with multi-select support:
-
-```bash
-gomount umount
-# or
-gomount -u
-```
-
-**Note**: Batch operations continue even if individual operations fail. Success/failure count is displayed at the end.
-
-### Custom Config Path
-
-Use a configuration file from a custom location:
-
-```bash
-gomount -c /path/to/config.yaml list
-```
-
-### Daemon Management
-
-WebDAV and OSS mounts are managed by the gomount daemon. Check whether it is running:
-
-```bash
-gomount daemon status
-```
-
-Stop the daemon gracefully. Active WebDAV and OSS sessions are unmounted first; if any unmount fails, the daemon keeps running and reports the failed session.
-
-```bash
-gomount daemon down
-```
-
-### Help
-
-```bash
-gomount --help
-gomount list --help
-gomount mount --help
-gomount umount --help
-gomount daemon --help
-```
-
-## CLI Reference
-
-```
-gomount                          Show help (default)
-gomount list                     List all configured mount points
-gomount mount [name]             Mount shares (interactive without name)
-gomount umount [name]            Unmount shares (interactive without name)
-gomount daemon status            Show daemon status and PID
-gomount daemon down              Gracefully stop the daemon
-gomount config-example           Print example config file
-
-Global Options:
-  -c, --config string   Path to config file (default: ~/.config/gomount_config.yaml)
-  -h, --help            Show help
-```
-
-## TUI Navigation
-
-### List View
-- `↑` / `k` - Move cursor up
-- `↓` / `j` - Move cursor down
-- `g` / `home` - Jump to first item
-- `G` / `end` - Jump to last item
-- `q` / `esc` - Quit
-
-### Selection Menu (Mount/Unmount)
-- `↑` / `k` - Move cursor up
-- `↓` / `j` - Move cursor down
-- `space` - Toggle selection for current item (multi-select)
-- `enter` - Confirm and mount/unmount all selected items
-- `q` / `esc` - Cancel
-
-## Security Considerations
-
-- **Password Storage**: Avoid storing passwords in plaintext in the config file. Omit the `password` field to be prompted interactively.
-- **File Permissions**: Set restrictive permissions on your config file:
-  ```bash
-  chmod 600 ~/.config/gomount_config.yaml
-  ```
-- **Credential Files**: Temporary credential files are created with mode 0600 and deleted immediately after use.
-
-## Development
-
-### Build
-
-```bash
-make build
-```
-
-### Build for Multiple Platforms
-
-```bash
-make build-all
-```
-
-### Run Tests
-
-```bash
-make test
-```
-
-### Lint
-
-```bash
-make lint
-```
-
-### Format Code
-
-```bash
-make fmt
-```
-
-## Project Structure
-
-```
-gomount/
-├── cmd/gomount/            # Application entry point
-├── internal/
-│   ├── config/             # Configuration management
-│   ├── mount/              # Mount/umount operations
-│   ├── drivers/            # Protocol drivers (smb, sshfs)
-│   ├── tui/                # Terminal UI components
-│   ├── interaction/        # Interactive prompts and sudo handling
-│   └── privilege/          # Sudo handling
-├── configs/                # Example configurations
-├── Makefile                # Build automation
-└── README.md
-```
-
-## Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
-
-## License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## Acknowledgments
-
-Built with excellent open-source libraries:
-- [Cobra](https://github.com/spf13/cobra) - CLI framework
-- [Viper](https://github.com/spf13/viper) - Configuration management
-- [BubbleTea](https://github.com/charmbracelet/bubbletea) - TUI framework
-- [Lipgloss](https://github.com/charmbracelet/lipgloss) - Styling
-- [moby/sys/mountinfo](https://github.com/moby/sys/mountinfo) - Mount status detection
+拆分配置后，可以按工作、个人、设备或用途分别管理挂载项。这样既能让主配置保持简洁，也便于只同步或分享其中一部分配置；包含密码等敏感信息的文件还可以单独保存并设置更严格的访问权限。
