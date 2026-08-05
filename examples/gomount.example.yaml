@@ -1,0 +1,55 @@
+# gomount 完整配置示例
+# 请根据实际环境修改后保存到 ~/.config/gomount.yaml。
+# 配置中可能包含密码或访问密钥，建议执行：chmod 600 ~/.config/gomount.yaml
+
+mounts:
+  # SMB/CIFS：挂载 NAS 或 Windows 文件共享
+  - name: home-nas                 # 挂载项名称，需在所有配置文件中保持唯一
+    type: smb
+    smb:
+      addr: 192.0.2.10             # SMB 服务器的主机名或 IP 地址
+      # port: 445                  # 可选，默认端口为 445
+      share_name: documents        # 服务器上的共享名称
+      username: example-user       # SMB 登录用户名
+      # password: change-me        # 可选；省略后将在挂载时交互式输入
+    mount_dir_path: ~/Mounts/nas   # 本机挂载目录，支持使用 ~
+
+  # SSHFS：通过 SSH 挂载远程目录
+  # 用户名、端口、密钥和 ProxyJump 等连接选项建议写在 ~/.ssh/config 中。
+  - name: dev-server
+    type: sshfs
+    sshfs:
+      host: dev-server             # ~/.ssh/config 中的 Host 别名，也可填写主机名
+      remote_path: /srv/projects   # 远程服务器上的目录
+    mount_dir_path: ~/Mounts/dev
+
+  # 阿里云 OSS：挂载 Bucket 或 Bucket 中的指定路径
+  - name: oss-archive
+    type: aliyun_oss
+    aliyun_oss:
+      bucket: example-bucket
+      path: backups                # 可选，只挂载 Bucket 下的这个路径
+      endpoint: oss-cn-beijing.aliyuncs.com
+      access_key_id: your-access-key-id
+      access_key_secret: your-access-key-secret
+      # security_token: your-security-token  # 使用 STS 临时凭据时填写
+    mount_dir_path: ~/Mounts/oss-archive
+
+  # WebDAV：挂载支持 WebDAV 协议的网盘或文件服务
+  - name: team-docs
+    type: webdav
+    webdav:
+      url: https://dav.example.com/remote.php/dav/files/example-user/
+      username: example-user       # 可选，取决于服务端是否要求认证
+      password: change-me          # 可选，请勿提交真实密码
+      path: /team/docs             # 可选，只挂载 WebDAV 地址下的这个路径
+    mount_dir_path: ~/Mounts/team-docs
+
+# 可将挂载项拆分到其他配置文件中；其中的 mounts 会合并到当前配置。
+# 支持绝对路径、以 ~ 开头的路径、相对路径以及 glob 通配符。
+include:
+  - ~/.config/gomount.d/*.yaml
+
+# 可选：控制挂载项在交互界面和列表中的顺序；省略时保持声明顺序。
+sorting:
+  by: name                         # 也可使用字段列表，并以 - 前缀表示降序
