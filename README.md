@@ -105,3 +105,131 @@ mounts:
 被引用的文件仍然使用相同的 `mounts` 结构。`include` 支持单个文件和通配符，也可以继续引用其他配置；相对路径以当前配置文件所在目录为基准，同时支持绝对路径和以 `~` 开头的路径。
 
 拆分配置后，可以按工作、个人、设备或用途分别管理挂载项。这样既能让主配置保持简洁，也便于只同步或分享其中一部分配置；包含密码等敏感信息的文件还可以单独保存并设置更严格的访问权限。
+
+## 使用方法
+
+### 交互式挂载
+
+交互式界面是 gomount 最主要的使用方式。运行以下命令进入界面：
+
+```bash
+gomount i
+```
+
+`i` 是 `interactive` 的简写，也可以使用完整命令：
+
+```bash
+gomount interactive
+```
+
+进入界面后，gomount 会读取配置并检查每个挂载项的当前状态。列表中会显示挂载项的名称、远程地址和类型：已挂载的项目显示为选中状态，未挂载的项目显示为未选中状态。
+
+界面大致如下，实际显示时会使用颜色区分不同状态：
+
+```text
+Select shares to mount/unmount:
+
+▸ [✓] home-nas › //192.0.2.10:445/documents (smb)
+  [ ] dev-server › dev-server:/srv/projects (sshfs)
+  [ ] oss-archive › oss://example-bucket/backups@oss-cn-hangzhou.aliyuncs.com (aliyun_oss)
+  [✓] team-docs › https://dav.example.com/dav/:/team/docs (webdav)
+
+↑/k: up | ↓/j: down | space: select | enter: confirm | q/esc: cancel
+```
+
+- 使用 `↑`、`↓` 或 `k`、`j` 移动光标。
+- 按 `Space` 切换当前项目的目标状态，可以一次选择多个项目。
+- 按 `Enter` 确认，gomount 会挂载新选中的项目，并卸载取消选中的项目。
+- 按 `q`、`Esc` 或 `Ctrl+C` 退出，不执行任何操作。
+
+如果使用的不是默认配置文件，可以在进入交互界面时通过 `-c` 指定：
+
+```bash
+gomount -c /path/to/config.yaml i
+```
+
+### 挂载指定项目
+
+不进入交互界面，直接按配置中的名称挂载一个或多个项目：
+
+```bash
+gomount m home-nas
+gomount m home-nas dev-server
+```
+
+`m` 是 `mount` 的简写，完整命令为 `gomount mount <名称>`。
+
+### 卸载指定项目
+
+按配置中的名称卸载一个或多个项目：
+
+```bash
+gomount u home-nas
+gomount u home-nas dev-server
+```
+
+`u` 是 `unmount` 的简写，完整命令为 `gomount unmount <名称>`。
+
+### 查看挂载列表
+
+查看所有配置项及其当前挂载状态：
+
+```bash
+gomount l
+```
+
+`l` 是 `list` 的简写，完整命令为 `gomount list`。
+
+### 后台 daemon
+
+除了直接执行命令，gomount 还可能在后台启动一个 daemon 进程。
+
+SMB 和 SSHFS 的挂载由系统中的 `mount.cifs`、`mount_smbfs` 或 `sshfs` 等工具完成，gomount 发出挂载命令后即可退出。其他挂载类型则由 gomount 内部的挂载引擎提供服务，需要有一个持续运行的进程来维持挂载、处理文件读写并记录挂载状态，因此由 daemon 统一管理。
+
+#### 什么时候会启动
+
+当你通过交互界面或 `gomount m` 挂载一个需要 daemon 管理的项目时，gomount 会先检查 daemon 是否已经运行：
+
+- 如果已经运行，CLI 会直接把挂载请求交给它。
+- 如果尚未运行，CLI 会自动在后台启动它，等待就绪后再继续挂载。
+- 如果只使用 SMB 和 SSHFS，gomount 不会因此启动 daemon。
+
+daemon 启动后独立于当前这次 CLI 操作运行。关闭交互界面或退出当前终端命令，不会同时关闭 daemon；即使它管理的挂载项已经全部卸载，daemon 也不会自动退出。之后再次挂载时，gomount 会继续使用现有进程。
+
+通常不需要手动启动 daemon，也不需要在每次使用完 gomount 后立即关闭它。
+
+#### 查看运行状态
+
+可以查看 daemon 是否正在运行、进程 ID，以及当前由它维持的挂载数量：
+
+```bash
+gomount d status
+```
+
+`d` 是 `daemon` 的简写，完整命令为 `gomount daemon status`。
+
+#### 什么时候需要关闭
+
+以下情况适合手动关闭 daemon：
+
+- 暂时不再使用由 daemon 管理的挂载，希望释放后台进程占用的资源。
+- 准备退出系统、维护挂载环境，或希望先干净地卸载相关资源。
+- 升级了 gomount，希望结束旧版本的 daemon，让下次挂载时自动启动新版本。
+- daemon 状态异常，需要在确认不再使用相关挂载后重新启动。
+
+使用以下命令关闭：
+
+```bash
+gomount d down
+```
+
+关闭时，gomount 会先卸载该 daemon 当前管理的所有挂载，再停止后台进程。这意味着正在使用这些挂载目录的程序会失去访问，因此不要在仍有文件读写、终端位于挂载目录中，或其他程序正在使用相关文件时执行此命令。
+
+如果某个挂载无法安全卸载，命令会报告错误，daemon 也会继续运行，以免在挂载尚未清理完成时直接退出。相比直接使用 `kill` 终止进程，应优先使用 `gomount d down`。
+
+如果配置中自定义了 daemon 的通信路径，查询状态和关闭时需要通过 `-c` 使用同一份配置：
+
+```bash
+gomount -c /path/to/config.yaml d status
+gomount -c /path/to/config.yaml d down
+```
