@@ -29,9 +29,6 @@ import (
 )
 
 var (
-	//go:embed config.example.yaml
-	configExample string
-
 	//go:embed usage.tmpl
 	usageTemplate string
 
@@ -127,16 +124,6 @@ var mkdirCmd = &cobra.Command{
 	RunE: runMkdir,
 }
 
-var configExampleCmd = &cobra.Command{
-	Use:     "config-example",
-	Aliases: []string{"ce"},
-	Short:   "输出配置文件示例",
-	Long:    `输出一个包含所有挂载类型的配置文件示例，可重定向到文件使用。`,
-	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Fprint(os.Stdout, configExample)
-	},
-}
-
 func init() {
 	rootCmd.PersistentFlags().StringVarP(&configPath, "config", "c", "",
 		fmt.Sprintf("配置文件路径 (默认: %s)", config.DefaultConfigPath()))
@@ -154,7 +141,6 @@ func init() {
 	rootCmd.AddCommand(daemonCmd)
 	mkdirCmd.Flags().BoolVar(&mkdirDryRun, "dry-run", false, "仅预览将要执行的操作")
 	rootCmd.AddCommand(mkdirCmd)
-	rootCmd.AddCommand(configExampleCmd)
 
 	cmdNameFunc := func(name string, aliases []string) string {
 		if len(aliases) == 0 {
