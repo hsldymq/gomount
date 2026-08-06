@@ -5,7 +5,7 @@
     - [安装gomount](#%E5%AE%89%E8%A3%85gomount)
         - [系统要求](#%E7%B3%BB%E7%BB%9F%E8%A6%81%E6%B1%82)
         - [在Linux上安装gomount](#%E5%9C%A8linux%E4%B8%8A%E5%AE%89%E8%A3%85gomount)
-    - [macOS上安装gomount](#macos%E4%B8%8A%E5%AE%89%E8%A3%85gomount)
+        - [macOS上安装gomount](#macos%E4%B8%8A%E5%AE%89%E8%A3%85gomount)
     - [配置](#%E9%85%8D%E7%BD%AE)
         - [基本结构](#%E5%9F%BA%E6%9C%AC%E7%BB%93%E6%9E%84)
         - [引用其他配置](#%E5%BC%95%E7%94%A8%E5%85%B6%E4%BB%96%E9%85%8D%E7%BD%AE)
@@ -58,7 +58,7 @@ sudo pacman -S cifs-utils sshfs
 go install github.com/hsldymq/gomount/cmd/gomount@latest
 ```
 
-## macOS上安装gomount
+### macOS上安装gomount
 
 **安装依赖**
 ```zsh
