@@ -58,7 +58,7 @@ sudo pacman -S cifs-utils sshfs
 go install github.com/hsldymq/gomount/cmd/gomount@latest
 ```
 
-### macOS上安装gomount
+### 在macOS上安装gomount
 
 **安装依赖**
 ```zsh
