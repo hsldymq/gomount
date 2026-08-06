@@ -253,7 +253,9 @@ func entrySegments(entry config.MountEntry) []lineSegment {
 	}
 
 	typeLabel := fmt.Sprintf("(%s)", entry.Type)
-	if entry.SSHTunnel != nil {
+	if entry.Type == "s3" && entry.S3 != nil && entry.S3.Provider != "" {
+		typeLabel = fmt.Sprintf("(s3: %s)", entry.S3.Provider)
+	} else if entry.SSHTunnel != nil {
 		typeLabel = fmt.Sprintf("(%s, tunnel: %s)", entry.Type, entry.SSHTunnel.Host)
 	}
 

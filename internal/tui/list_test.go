@@ -38,3 +38,15 @@ func TestEntryAddrS3(t *testing.T) {
 		t.Fatalf("entryAddr() = %q", got)
 	}
 }
+
+func TestEntrySegmentsS3IncludesProvider(t *testing.T) {
+	entry := config.MountEntry{
+		Type: "s3",
+		S3:   &config.S3Config{Provider: "aliyun_oss", Bucket: "example-bucket"},
+	}
+
+	segments := entrySegments(entry)
+	if got := segments[len(segments)-1].Text; got != "(s3: aliyun_oss)" {
+		t.Fatalf("type label = %q", got)
+	}
+}

@@ -152,7 +152,7 @@ Select shares to mount/unmount:
 
 ▸ [✓] home-nas › //192.0.2.10:445/documents (smb)
   [ ] dev-server › dev-server:/srv/projects (sshfs)
-  [ ] s3-archive › s3://example-bucket/backups@oss-cn-hangzhou.aliyuncs.com (s3)
+  [ ] s3-archive › s3://example-bucket/backups@oss-cn-hangzhou.aliyuncs.com (s3: aliyun_oss)
   [✓] team-docs › https://dav.example.com/dav/:/team/docs (webdav)
 
 ↑/k: up | ↓/j: down | space: select | enter: confirm | q/esc: cancel
