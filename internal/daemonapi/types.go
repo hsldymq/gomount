@@ -7,11 +7,15 @@ type Source struct {
 	Username        string `json:"username,omitempty"`
 	Password        string `json:"password,omitempty"`
 	Path            string `json:"path,omitempty"`
+	Provider        string `json:"provider,omitempty"`
 	Bucket          string `json:"bucket,omitempty"`
+	Region          string `json:"region,omitempty"`
 	Endpoint        string `json:"endpoint,omitempty"`
 	AccessKeyID     string `json:"access_key_id,omitempty"`
-	AccessKeySecret string `json:"access_key_secret,omitempty"`
-	SecurityToken   string `json:"security_token,omitempty"`
+	SecretAccessKey string `json:"secret_access_key,omitempty"`
+	SessionToken    string `json:"session_token,omitempty"`
+	EnvAuth         bool   `json:"env_auth,omitempty"`
+	ForcePathStyle  *bool  `json:"force_path_style,omitempty"`
 }
 
 type EntrySnapshot struct {
@@ -35,15 +39,18 @@ func (e EntrySnapshot) Validate() error {
 	if e.Type == "webdav" && e.Source.URL == "" {
 		return fmt.Errorf("webdav source url is required")
 	}
-	if e.Type == "aliyun_oss" {
+	if e.Type == "s3" {
+		if e.Source.Provider == "" {
+			return fmt.Errorf("s3 source provider is required")
+		}
 		if e.Source.Bucket == "" {
-			return fmt.Errorf("aliyun_oss source bucket is required")
+			return fmt.Errorf("s3 source bucket is required")
 		}
-		if e.Source.Endpoint == "" {
-			return fmt.Errorf("aliyun_oss source endpoint is required")
+		if (e.Source.AccessKeyID == "") != (e.Source.SecretAccessKey == "") {
+			return fmt.Errorf("s3 access key id and secret access key must be provided together")
 		}
-		if e.Source.AccessKeyID == "" || e.Source.AccessKeySecret == "" {
-			return fmt.Errorf("aliyun_oss source access key id and secret are required")
+		if e.Source.EnvAuth && e.Source.AccessKeyID != "" {
+			return fmt.Errorf("s3 env auth cannot be combined with static credentials")
 		}
 	}
 	return nil
@@ -102,9 +109,9 @@ type ErrorPayload struct {
 }
 
 func ManagedTypes() []string {
-	return []string{"webdav", "aliyun_oss"}
+	return []string{"webdav", "s3"}
 }
 
 func IsManagedType(t string) bool {
-	return t == "webdav" || t == "aliyun_oss"
+	return t == "webdav" || t == "s3"
 }

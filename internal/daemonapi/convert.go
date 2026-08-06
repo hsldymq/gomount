@@ -15,14 +15,16 @@ func FromMountEntry(entry *config.MountEntry) (EntrySnapshot, bool) {
 			return snapshot, false
 		}
 		snapshot.Source = Source{URL: entry.WebDAV.URL, Username: entry.WebDAV.Username, Password: entry.WebDAV.Password, Path: entry.WebDAV.Path}
-	case "aliyun_oss":
-		if entry.AliyunOSS == nil {
+	case "s3":
+		if entry.S3 == nil {
 			return snapshot, false
 		}
 		snapshot.Source = Source{
-			Bucket: entry.AliyunOSS.Bucket, Path: entry.AliyunOSS.Path, Endpoint: entry.AliyunOSS.Endpoint,
-			AccessKeyID: entry.AliyunOSS.AccessKeyID, AccessKeySecret: entry.AliyunOSS.AccessKeySecret,
-			SecurityToken: entry.AliyunOSS.SecurityToken,
+			Provider: entry.S3.Provider, Bucket: entry.S3.Bucket, Path: entry.S3.Path,
+			Region: entry.S3.Region, Endpoint: entry.S3.Endpoint,
+			AccessKeyID: entry.S3.AccessKeyID, SecretAccessKey: entry.S3.SecretAccessKey,
+			SessionToken: entry.S3.SessionToken, EnvAuth: entry.S3.EnvAuth,
+			ForcePathStyle: entry.S3.ForcePathStyle,
 		}
 	default:
 		return snapshot, false

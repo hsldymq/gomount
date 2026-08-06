@@ -39,16 +39,18 @@ func TestFromMountEntryReturnsUnmanagedSnapshotForSMB(t *testing.T) {
 	}
 }
 
-func TestFromMountEntryConvertsOSS(t *testing.T) {
-	entry := config.MountEntry{Name: "archive", Type: "aliyun_oss", MountDirPath: "/mnt/oss", AliyunOSS: &config.AliyunOSSConfig{
-		Bucket: "my-bucket", Path: "backups", Endpoint: "oss-cn-hangzhou.aliyuncs.com",
-		AccessKeyID: "id", AccessKeySecret: "secret", SecurityToken: "token",
+func TestFromMountEntryConvertsS3(t *testing.T) {
+	forcePathStyle := false
+	entry := config.MountEntry{Name: "archive", Type: "s3", MountDirPath: "/mnt/s3", S3: &config.S3Config{
+		Provider: "aliyun_oss", Bucket: "my-bucket", Path: "backups", Region: "cn-hangzhou",
+		Endpoint: "oss-cn-hangzhou.aliyuncs.com", AccessKeyID: "id", SecretAccessKey: "secret",
+		SessionToken: "token", ForcePathStyle: &forcePathStyle,
 	}}
 	snapshot, ok := FromMountEntry(&entry)
 	if !ok {
-		t.Fatal("expected oss entry to convert")
+		t.Fatal("expected s3 entry to convert")
 	}
-	if snapshot.Source.Bucket != "my-bucket" || snapshot.Source.Path != "backups" || snapshot.Source.Endpoint != "oss-cn-hangzhou.aliyuncs.com" || snapshot.Source.AccessKeyID != "id" || snapshot.Source.AccessKeySecret != "secret" || snapshot.Source.SecurityToken != "token" {
+	if snapshot.Source.Provider != "aliyun_oss" || snapshot.Source.Bucket != "my-bucket" || snapshot.Source.Path != "backups" || snapshot.Source.Region != "cn-hangzhou" || snapshot.Source.Endpoint != "oss-cn-hangzhou.aliyuncs.com" || snapshot.Source.AccessKeyID != "id" || snapshot.Source.SecretAccessKey != "secret" || snapshot.Source.SessionToken != "token" || snapshot.Source.ForcePathStyle == nil || *snapshot.Source.ForcePathStyle {
 		t.Fatalf("unexpected snapshot: %+v", snapshot)
 	}
 }

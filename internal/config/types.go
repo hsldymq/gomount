@@ -38,10 +38,10 @@ type MountEntry struct {
 	Type         string `yaml:"type" mapstructure:"type" validate:"required"`
 	MountDirPath string `yaml:"mount_dir_path" mapstructure:"mount_dir_path" validate:"required"`
 
-	SMB       *SMBConfig       `yaml:"smb,omitempty" mapstructure:"smb"`
-	SSHFS     *SSHFSConfig     `yaml:"sshfs,omitempty" mapstructure:"sshfs"`
-	WebDAV    *WebDAVConfig    `yaml:"webdav,omitempty" mapstructure:"webdav"`
-	AliyunOSS *AliyunOSSConfig `yaml:"aliyun_oss,omitempty" mapstructure:"aliyun_oss"`
+	SMB    *SMBConfig    `yaml:"smb,omitempty" mapstructure:"smb"`
+	SSHFS  *SSHFSConfig  `yaml:"sshfs,omitempty" mapstructure:"sshfs"`
+	WebDAV *WebDAVConfig `yaml:"webdav,omitempty" mapstructure:"webdav"`
+	S3     *S3Config     `yaml:"s3,omitempty" mapstructure:"s3"`
 
 	SSHTunnel *SSHTunnelConfig `yaml:"ssh_tunnel,omitempty" mapstructure:"ssh_tunnel"`
 
@@ -71,14 +71,38 @@ type WebDAVConfig struct {
 	Path     string `yaml:"path,omitempty" mapstructure:"path"`
 }
 
-// AliyunOSSConfig configures an Alibaba Cloud OSS bucket through rclone's S3 backend.
-type AliyunOSSConfig struct {
+type S3Config struct {
+	Provider        string `yaml:"provider" mapstructure:"provider" validate:"required"`
 	Bucket          string `yaml:"bucket" mapstructure:"bucket" validate:"required"`
 	Path            string `yaml:"path,omitempty" mapstructure:"path"`
-	Endpoint        string `yaml:"endpoint" mapstructure:"endpoint" validate:"required"`
-	AccessKeyID     string `yaml:"access_key_id" mapstructure:"access_key_id" validate:"required"`
-	AccessKeySecret string `yaml:"access_key_secret" mapstructure:"access_key_secret" validate:"required"`
-	SecurityToken   string `yaml:"security_token,omitempty" mapstructure:"security_token"`
+	Region          string `yaml:"region,omitempty" mapstructure:"region"`
+	Endpoint        string `yaml:"endpoint,omitempty" mapstructure:"endpoint"`
+	AccessKeyID     string `yaml:"access_key_id,omitempty" mapstructure:"access_key_id"`
+	SecretAccessKey string `yaml:"secret_access_key,omitempty" mapstructure:"secret_access_key"`
+	SessionToken    string `yaml:"session_token,omitempty" mapstructure:"session_token"`
+	EnvAuth         bool   `yaml:"env_auth,omitempty" mapstructure:"env_auth"`
+	ForcePathStyle  *bool  `yaml:"force_path_style,omitempty" mapstructure:"force_path_style"`
+}
+
+func ResolveS3Provider(provider string) string {
+	switch provider {
+	case "aws":
+		return "AWS"
+	case "aliyun_oss":
+		return "Alibaba"
+	case "tencent_cos":
+		return "TencentCOS"
+	case "qiniu_kodo":
+		return "Qiniu"
+	case "minio":
+		return "Minio"
+	case "cloudflare_r2":
+		return "Cloudflare"
+	case "rustfs", "other":
+		return "Other"
+	default:
+		return provider
+	}
 }
 
 type SSHTunnelConfig struct {
@@ -145,21 +169,21 @@ func (m *MountEntry) ValidateDriverConfig() error {
 		if parsedURL.User != nil {
 			return fmt.Errorf("mount entry '%s': webdav.url must not include credentials; use webdav.username and webdav.password", m.Name)
 		}
-	case "aliyun_oss":
-		if m.AliyunOSS == nil {
-			return fmt.Errorf("mount entry '%s': type is 'aliyun_oss' but 'aliyun_oss' config is missing", m.Name)
+	case "s3":
+		if m.S3 == nil {
+			return fmt.Errorf("mount entry '%s': type is 's3' but 's3' config is missing", m.Name)
 		}
-		if m.AliyunOSS.Bucket == "" {
-			return fmt.Errorf("mount entry '%s': aliyun_oss.bucket is required", m.Name)
+		if m.S3.Provider == "" {
+			return fmt.Errorf("mount entry '%s': s3.provider is required", m.Name)
 		}
-		if m.AliyunOSS.Endpoint == "" {
-			return fmt.Errorf("mount entry '%s': aliyun_oss.endpoint is required", m.Name)
+		if m.S3.Bucket == "" {
+			return fmt.Errorf("mount entry '%s': s3.bucket is required", m.Name)
 		}
-		if m.AliyunOSS.AccessKeyID == "" {
-			return fmt.Errorf("mount entry '%s': aliyun_oss.access_key_id is required", m.Name)
+		if (m.S3.AccessKeyID == "") != (m.S3.SecretAccessKey == "") {
+			return fmt.Errorf("mount entry '%s': s3.access_key_id and s3.secret_access_key must be provided together", m.Name)
 		}
-		if m.AliyunOSS.AccessKeySecret == "" {
-			return fmt.Errorf("mount entry '%s': aliyun_oss.access_key_secret is required", m.Name)
+		if m.S3.EnvAuth && m.S3.AccessKeyID != "" {
+			return fmt.Errorf("mount entry '%s': s3.env_auth cannot be combined with static credentials", m.Name)
 		}
 	default:
 		return fmt.Errorf("mount entry '%s': unknown type '%s'", m.Name, m.Type)

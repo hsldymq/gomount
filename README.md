@@ -8,7 +8,7 @@
 - SMB/CIFS
 - SSHFS
 - WebDAV
-- 阿里云OSS
+- S3 及兼容存储（AWS S3、阿里云 OSS、腾讯云 COS、七牛云 Kodo、MinIO、RustFS 等）
 
 ## 安装gomount
 
@@ -131,7 +131,7 @@ Select shares to mount/unmount:
 
 ▸ [✓] home-nas › //192.0.2.10:445/documents (smb)
   [ ] dev-server › dev-server:/srv/projects (sshfs)
-  [ ] oss-archive › oss://example-bucket/backups@oss-cn-hangzhou.aliyuncs.com (aliyun_oss)
+  [ ] s3-archive › s3://example-bucket/backups@oss-cn-hangzhou.aliyuncs.com (s3)
   [✓] team-docs › https://dav.example.com/dav/:/team/docs (webdav)
 
 ↑/k: up | ↓/j: down | space: select | enter: confirm | q/esc: cancel

@@ -23,17 +23,21 @@ mounts:
       remote_path: /srv/projects   # 远程服务器上的目录
     mount_dir_path: ~/Mounts/dev
 
-  # 阿里云 OSS：挂载 Bucket 或 Bucket 中的指定路径
-  - name: oss-archive
-    type: aliyun_oss
-    aliyun_oss:
+  # S3：挂载 AWS S3、阿里云 OSS、腾讯云 COS、七牛云 Kodo、Cloudflare R2、MinIO、RustFS 等兼容存储
+  # provider 可使用：aws、aliyun_oss、tencent_cos、qiniu_kodo、cloudflare_r2、minio、rustfs、other
+  - name: s3-archive
+    type: s3
+    s3:
+      provider: aliyun_oss
       bucket: example-bucket
       path: backups                # 可选，只挂载 Bucket 下的这个路径
       endpoint: oss-cn-beijing.aliyuncs.com
       access_key_id: your-access-key-id
-      access_key_secret: your-access-key-secret
-      # security_token: your-security-token  # 使用 STS 临时凭据时填写
-    mount_dir_path: ~/Mounts/oss-archive
+      secret_access_key: your-secret-access-key
+      # session_token: your-session-token     # 使用临时凭据时填写
+      # env_auth: true                        # 从环境或实例角色读取凭据；不要同时填写静态密钥
+      # force_path_style: true                # 部分自建 S3 服务需要启用
+    mount_dir_path: ~/Mounts/s3-archive
 
   # WebDAV：挂载支持 WebDAV 协议的网盘或文件服务
   - name: team-docs
@@ -48,6 +52,7 @@ mounts:
 # 可将挂载项拆分到其他配置文件中；其中的 mounts 会合并到当前配置。
 # 支持绝对路径、以 ~ 开头的路径、相对路径以及 glob 通配符。
 include:
+  - /path/to/gomount/config.yaml
   - ~/.config/gomount.d/*.yaml
 
 # 可选：控制挂载项在交互界面和列表中的顺序；省略时保持声明顺序。

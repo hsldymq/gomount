@@ -10,7 +10,7 @@ import (
 )
 
 func TestDarwinUnsupportedMounterExplainsCmountBuild(t *testing.T) {
-	_, err := NewRcloneMounter().Mount(daemonapi.EntrySnapshot{Type: "aliyun_oss"})
+	_, err := NewRcloneMounter().Mount(daemonapi.EntrySnapshot{Type: "s3"})
 	if err == nil || !strings.Contains(err.Error(), "-tags cmount") {
 		t.Fatalf("expected actionable cmount error, got %v", err)
 	}

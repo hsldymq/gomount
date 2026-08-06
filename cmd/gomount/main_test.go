@@ -313,17 +313,17 @@ func TestSnapshotsFromEntriesCanIncludeWebDAVPassword(t *testing.T) {
 	}
 }
 
-func TestOSSEntrySourceAndSnapshotCredentialRedaction(t *testing.T) {
-	entry := &config.MountEntry{Name: "archive", Type: "aliyun_oss", MountDirPath: "/mnt/oss", AliyunOSS: &config.AliyunOSSConfig{
-		Bucket: "my-bucket", Path: "/team/backups/", Endpoint: "oss-cn-hangzhou.aliyuncs.com",
-		AccessKeyID: "id", AccessKeySecret: "secret", SecurityToken: "token",
+func TestS3EntrySourceAndSnapshotCredentialRedaction(t *testing.T) {
+	entry := &config.MountEntry{Name: "archive", Type: "s3", MountDirPath: "/mnt/s3", S3: &config.S3Config{
+		Provider: "aliyun_oss", Bucket: "my-bucket", Path: "/team/backups/", Endpoint: "oss-cn-hangzhou.aliyuncs.com",
+		AccessKeyID: "id", SecretAccessKey: "secret", SessionToken: "token",
 	}}
-	if got := entrySource(entry); got != "oss://my-bucket/team/backups@oss-cn-hangzhou.aliyuncs.com" {
+	if got := entrySource(entry); got != "s3://my-bucket/team/backups@oss-cn-hangzhou.aliyuncs.com" {
 		t.Fatalf("entrySource() = %q", got)
 	}
 	snapshots := snapshotsFromEntries(entriesWithoutPasswords, []*config.MountEntry{entry})
-	if len(snapshots) != 1 || snapshots[0].Source.AccessKeyID != "" || snapshots[0].Source.AccessKeySecret != "" || snapshots[0].Source.SecurityToken != "" {
-		t.Fatalf("expected OSS credentials to be redacted, got %+v", snapshots)
+	if len(snapshots) != 1 || snapshots[0].Source.AccessKeyID != "" || snapshots[0].Source.SecretAccessKey != "" || snapshots[0].Source.SessionToken != "" {
+		t.Fatalf("expected S3 credentials to be redacted, got %+v", snapshots)
 	}
 }
 

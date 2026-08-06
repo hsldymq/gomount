@@ -89,15 +89,15 @@ func TestSessionManagerRejectsInvalidWebDAVSnapshot(t *testing.T) {
 	}
 }
 
-func TestSessionManagerMountsOSSWithFakeMounter(t *testing.T) {
+func TestSessionManagerMountsS3WithFakeMounter(t *testing.T) {
 	fake := &fakeMounter{}
 	mgr := NewSessionManager(fake)
-	entry := daemonapi.EntrySnapshot{Name: "archive", Type: "aliyun_oss", MountDirPath: "/mnt/oss", Source: daemonapi.Source{
-		Bucket: "my-bucket", Endpoint: "oss-cn-hangzhou.aliyuncs.com", AccessKeyID: "id", AccessKeySecret: "secret",
+	entry := daemonapi.EntrySnapshot{Name: "archive", Type: "s3", MountDirPath: "/mnt/s3", Source: daemonapi.Source{
+		Provider: "aliyun_oss", Bucket: "my-bucket", Endpoint: "oss-cn-hangzhou.aliyuncs.com", AccessKeyID: "id", SecretAccessKey: "secret",
 	}}
 	result := mgr.Mount(entry)
 	if !result.Success || !result.Mounted {
-		t.Fatalf("expected successful OSS mount, got %+v", result)
+		t.Fatalf("expected successful S3 mount, got %+v", result)
 	}
 }
 

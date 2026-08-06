@@ -27,3 +27,14 @@ func TestEntryAddrWebDAVRedactsURLUserinfo(t *testing.T) {
 		t.Fatalf("entryAddr() = %q", got)
 	}
 }
+
+func TestEntryAddrS3(t *testing.T) {
+	entry := config.MountEntry{
+		Type: "s3",
+		S3:   &config.S3Config{Provider: "aliyun_oss", Bucket: "example-bucket", Path: "/backups/", Endpoint: "oss-cn-hangzhou.aliyuncs.com"},
+	}
+
+	if got := entryAddr(entry); got != "s3://example-bucket/backups@oss-cn-hangzhou.aliyuncs.com" {
+		t.Fatalf("entryAddr() = %q", got)
+	}
+}

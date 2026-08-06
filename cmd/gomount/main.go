@@ -407,22 +407,26 @@ func entrySource(entry *config.MountEntry) string {
 			return ""
 		}
 		return webdavSource(entry.WebDAV.URL, entry.WebDAV.Path)
-	case "aliyun_oss":
-		if entry.AliyunOSS == nil {
+	case "s3":
+		if entry.S3 == nil {
 			return ""
 		}
-		return aliyunOSSSource(entry.AliyunOSS)
+		return s3Source(entry.S3)
 	default:
 		return ""
 	}
 }
 
-func aliyunOSSSource(cfg *config.AliyunOSSConfig) string {
+func s3Source(cfg *config.S3Config) string {
 	root := cfg.Bucket
 	if cfg.Path != "" {
 		root += "/" + strings.Trim(cfg.Path, "/")
 	}
-	return fmt.Sprintf("oss://%s@%s", root, cfg.Endpoint)
+	target := cfg.Endpoint
+	if target == "" {
+		target = cfg.Provider
+	}
+	return fmt.Sprintf("s3://%s@%s", root, target)
 }
 
 func webdavSource(rawURL, path string) string {
@@ -663,8 +667,8 @@ func snapshotsFromEntries(passwordMode snapshotPasswordMode, entries []*config.M
 		if passwordMode == entriesWithoutPasswords {
 			snapshot.Source.Password = ""
 			snapshot.Source.AccessKeyID = ""
-			snapshot.Source.AccessKeySecret = ""
-			snapshot.Source.SecurityToken = ""
+			snapshot.Source.SecretAccessKey = ""
+			snapshot.Source.SessionToken = ""
 		}
 		snapshots = append(snapshots, snapshot)
 	}

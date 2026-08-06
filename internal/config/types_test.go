@@ -122,27 +122,34 @@ func TestMountEntry_ValidateDriverConfigRejectsWebDAVURLUserinfo(t *testing.T) {
 	}
 }
 
-func TestMountEntryValidateDriverConfigAcceptsOSS(t *testing.T) {
-	entry := MountEntry{Name: "archive", Type: "aliyun_oss", AliyunOSS: &AliyunOSSConfig{
-		Bucket: "my-bucket", Endpoint: "oss-cn-hangzhou.aliyuncs.com", AccessKeyID: "id", AccessKeySecret: "secret",
+func TestMountEntryValidateDriverConfigAcceptsS3(t *testing.T) {
+	entry := MountEntry{Name: "archive", Type: "s3", S3: &S3Config{
+		Provider: "aliyun_oss", Bucket: "my-bucket", Endpoint: "oss-cn-hangzhou.aliyuncs.com",
+		AccessKeyID: "id", SecretAccessKey: "secret",
 	}}
 	if err := entry.ValidateDriverConfig(); err != nil {
-		t.Fatalf("expected oss config to be accepted, got %v", err)
+		t.Fatalf("expected s3 config to be accepted, got %v", err)
 	}
 }
 
-func TestMountEntryValidateDriverConfigRejectsIncompleteOSS(t *testing.T) {
-	entry := MountEntry{Name: "archive", Type: "aliyun_oss", AliyunOSS: &AliyunOSSConfig{Bucket: "my-bucket"}}
+func TestMountEntryValidateDriverConfigRejectsIncompleteCredentials(t *testing.T) {
+	entry := MountEntry{Name: "archive", Type: "s3", S3: &S3Config{Provider: "aws", Bucket: "my-bucket", AccessKeyID: "id"}}
 	err := entry.ValidateDriverConfig()
-	if err == nil || !strings.Contains(err.Error(), "aliyun_oss.endpoint is required") {
-		t.Fatalf("expected missing endpoint error, got %v", err)
+	if err == nil || !strings.Contains(err.Error(), "must be provided together") {
+		t.Fatalf("expected incomplete credentials error, got %v", err)
 	}
 }
 
-func TestMountEntryValidateDriverConfigRejectsLegacyOSSName(t *testing.T) {
-	entry := MountEntry{Name: "archive", Type: "oss"}
-	err := entry.ValidateDriverConfig()
-	if err == nil || !strings.Contains(err.Error(), "unknown type 'oss'") {
-		t.Fatalf("expected legacy oss type to be rejected, got %v", err)
+func TestResolveS3Provider(t *testing.T) {
+	tests := map[string]string{
+		"aws": "AWS", "aliyun_oss": "Alibaba", "tencent_cos": "TencentCOS",
+		"qiniu_kodo": "Qiniu", "minio": "Minio", "cloudflare_r2": "Cloudflare",
+		"rustfs": "Other", "other": "Other",
+		"Cloudflare": "Cloudflare",
+	}
+	for input, want := range tests {
+		if got := ResolveS3Provider(input); got != want {
+			t.Errorf("ResolveS3Provider(%q) = %q, want %q", input, got, want)
+		}
 	}
 }

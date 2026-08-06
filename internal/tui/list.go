@@ -18,18 +18,22 @@ func entryAddr(entry config.MountEntry) string {
 		return fmt.Sprintf("%s:%s", entry.SSHFS.Host, entry.SSHFS.RemotePath)
 	case entry.WebDAV != nil:
 		return webdavAddr(entry.WebDAV.URL, entry.WebDAV.Path)
-	case entry.AliyunOSS != nil:
-		return aliyunOSSAddr(entry.AliyunOSS)
+	case entry.S3 != nil:
+		return s3Addr(entry.S3)
 	}
 	return ""
 }
 
-func aliyunOSSAddr(cfg *config.AliyunOSSConfig) string {
+func s3Addr(cfg *config.S3Config) string {
 	root := cfg.Bucket
 	if cfg.Path != "" {
 		root += "/" + strings.Trim(cfg.Path, "/")
 	}
-	return fmt.Sprintf("oss://%s@%s", root, cfg.Endpoint)
+	target := cfg.Endpoint
+	if target == "" {
+		target = cfg.Provider
+	}
+	return fmt.Sprintf("s3://%s@%s", root, target)
 }
 
 func webdavAddr(rawURL, path string) string {
