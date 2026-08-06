@@ -1,4 +1,25 @@
 # gomount
+<!-- TOC -->
+
+- [gomount](#gomount)
+    - [安装gomount](#%E5%AE%89%E8%A3%85gomount)
+        - [系统要求](#%E7%B3%BB%E7%BB%9F%E8%A6%81%E6%B1%82)
+        - [在Linux上安装gomount](#%E5%9C%A8linux%E4%B8%8A%E5%AE%89%E8%A3%85gomount)
+    - [macOS上安装gomount](#macos%E4%B8%8A%E5%AE%89%E8%A3%85gomount)
+    - [配置](#%E9%85%8D%E7%BD%AE)
+        - [基本结构](#%E5%9F%BA%E6%9C%AC%E7%BB%93%E6%9E%84)
+        - [引用其他配置](#%E5%BC%95%E7%94%A8%E5%85%B6%E4%BB%96%E9%85%8D%E7%BD%AE)
+    - [使用方法](#%E4%BD%BF%E7%94%A8%E6%96%B9%E6%B3%95)
+        - [交互式挂载](#%E4%BA%A4%E4%BA%92%E5%BC%8F%E6%8C%82%E8%BD%BD)
+        - [挂载指定项目](#%E6%8C%82%E8%BD%BD%E6%8C%87%E5%AE%9A%E9%A1%B9%E7%9B%AE)
+        - [卸载指定项目](#%E5%8D%B8%E8%BD%BD%E6%8C%87%E5%AE%9A%E9%A1%B9%E7%9B%AE)
+        - [查看挂载列表](#%E6%9F%A5%E7%9C%8B%E6%8C%82%E8%BD%BD%E5%88%97%E8%A1%A8)
+        - [后台 daemon](#%E5%90%8E%E5%8F%B0-daemon)
+            - [什么时候会启动](#%E4%BB%80%E4%B9%88%E6%97%B6%E5%80%99%E4%BC%9A%E5%90%AF%E5%8A%A8)
+            - [查看运行状态](#%E6%9F%A5%E7%9C%8B%E8%BF%90%E8%A1%8C%E7%8A%B6%E6%80%81)
+            - [什么时候需要关闭](#%E4%BB%80%E4%B9%88%E6%97%B6%E5%80%99%E9%9C%80%E8%A6%81%E5%85%B3%E9%97%AD)
+
+<!-- /TOC -->
 
 `gomount` 是一个面向 Linux 和 macOS 的挂载管理工具。
 
